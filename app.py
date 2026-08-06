@@ -20,31 +20,21 @@ def home():
 
 @app.route("/lunch-review", methods=["GET", "POST"])
 def lunch_review():
-
     if request.method == "POST":
-
         pdf = request.files.get("pdf")
 
         if not pdf or pdf.filename == "":
             return "No file selected"
 
-        temp_pdf = None
-        temp_folder = None
+        temp_folder = tempfile.mkdtemp()
+        temp_pdf = os.path.join(temp_folder, "timesheets.pdf")
+        pdf.save(temp_pdf)
 
         try:
-
-            temp_folder = tempfile.mkdtemp()
-
-            temp_pdf = os.path.join(temp_folder, "timesheets.pdf")
-            pdf.save(temp_pdf)
-
-            records = []
-            html = "<h2>Lunch Review Results</h2>"
+            grouped_records = {}
 
             with pdfplumber.open(temp_pdf) as document:
-
                 for page in document.pages:
-
                     text = page.extract_text() or ""
 
                     name, department, shifts = extract_employee_page(text)
@@ -54,10 +44,9 @@ def lunch_review():
                     if "LPN" in department_upper or "RGN" in department_upper:
                         continue
 
-                    employee_results = []
+                    missed_dates = []
 
                     for work_date, segments in shifts.items():
-
                         total_hours = sum(
                             hours_between(start, end)
                             for start, end in segments
@@ -66,59 +55,42 @@ def lunch_review():
                         if total_hours < 7:
                             continue
 
-                        if len(segments) >= 2:
-                            result = "Lunch Taken"
+                        if len(segments) == 1:
+                            missed_dates.append(work_date)
 
-                        else:
-                            result = "No Lunch"
+                    if missed_dates:
+                        key = (name, department)
 
-                            records.append(
-                                build_ad347_record(
-                                    name=name,
-                                    department=department,
-                                    work_date=work_date,
-                                )
-                            )
+                        if key not in grouped_records:
+                            grouped_records[key] = []
 
-                        employee_results.append(
-                            (
-                                work_date,
-                                total_hours,
-                                result,
-                            )
-                        )
+                        grouped_records[key].extend(missed_dates)
 
-                    if employee_results:
-
-                        html += f"<hr><h3>{name}</h3>"
-                        html += f"<b>Department:</b> {department}<br><br>"
-
-                        for work_date, total_hours, result in employee_results:
-
-                            icon = "✅" if result == "Lunch Taken" else "❌"
-
-                            html += (
-                                f"{work_date} — "
-                                f"{total_hours:.2f} hours — "
-                                f"{icon} {result}<br>"
-                            )
-
-            if not records:
-
-                html += "<hr><h3>No AD-347 forms needed.</h3>"
-                html += '<p><a href="/lunch-review">Run another review</a></p>'
-
-                return html
+            if not grouped_records:
+                return """
+                <h2>No AD-347 forms needed.</h2>
+                <p><a href="/lunch-review">Run another review</a></p>
+                """
 
             pdf_files = []
 
-            for index, record in enumerate(records, start=1):
+            for index, ((name, department), dates) in enumerate(
+                grouped_records.items(),
+                start=1,
+            ):
+                unique_dates = sorted(set(dates))
 
-                safe_name = record["employee_name"].replace(" ", "_")
+                record = build_ad347_record(
+                    name=name,
+                    department=department,
+                    dates=unique_dates,
+                )
+
+                safe_name = name.replace(" ", "_")
 
                 output_path = os.path.join(
                     temp_folder,
-                    f"{index}_{safe_name}_{record['date'].replace('/', '-')}.pdf",
+                    f"{index}_{safe_name}_AD347.pdf",
                 )
 
                 create_ad347_pdf(
@@ -132,9 +104,7 @@ def lunch_review():
             zip_path = os.path.join(temp_folder, "AD347_Forms.zip")
 
             with zipfile.ZipFile(zip_path, "w") as zip_file:
-
                 for pdf_file in pdf_files:
-
                     zip_file.write(
                         pdf_file,
                         arcname=os.path.basename(pdf_file),
@@ -147,7 +117,6 @@ def lunch_review():
             )
 
         except Exception as error:
-
             return f"<h2>Error</h2><pre>{error}</pre>"
 
     return """
