@@ -1,12 +1,15 @@
 from flask import Flask, render_template, request, send_file
+import csv
 import os
 import tempfile
 import zipfile
+
 import pdfplumber
 
 from tools.lunch_review import extract_employee_page, hours_between
 from tools.ad347_data import build_ad347_record
 from tools.pdf_generator import create_ad347_pdf
+
 
 app = Flask(__name__)
 
@@ -38,7 +41,6 @@ def lunch_review():
                     text = page.extract_text() or ""
 
                     name, department, shifts = extract_employee_page(text)
-
                     department_upper = department.upper()
 
                     if "LPN" in department_upper or "RGN" in department_upper:
@@ -60,10 +62,7 @@ def lunch_review():
 
                     if missed_dates:
                         key = (name, department)
-
-                        if key not in grouped_records:
-                            grouped_records[key] = []
-
+                        grouped_records.setdefault(key, [])
                         grouped_records[key].extend(missed_dates)
 
             if not grouped_records:
@@ -73,9 +72,15 @@ def lunch_review():
                 """
 
             pdf_files = []
+            summary_rows = []
+
+            sorted_records = sorted(
+                grouped_records.items(),
+                key=lambda item: item[0][0],
+            )
 
             for index, ((name, department), dates) in enumerate(
-                grouped_records.items(),
+                sorted_records,
                 start=1,
             ):
                 unique_dates = sorted(set(dates))
@@ -86,7 +91,11 @@ def lunch_review():
                     dates=unique_dates,
                 )
 
-                safe_name = name.replace(" ", "_")
+                safe_name = (
+                    name.replace(" ", "_")
+                    .replace("/", "-")
+                    .replace("\\", "-")
+                )
 
                 output_path = os.path.join(
                     temp_folder,
@@ -101,9 +110,52 @@ def lunch_review():
 
                 pdf_files.append(output_path)
 
-            zip_path = os.path.join(temp_folder, "AD347_Forms.zip")
+                summary_rows.append(
+                    {
+                        "Employee Name": name,
+                        "Department": department,
+                        "Missed Lunch Dates": ", ".join(unique_dates),
+                        "Total Missed Lunches": len(unique_dates),
+                    }
+                )
+
+            summary_path = os.path.join(
+                temp_folder,
+                "Lunch_Review_Summary.csv",
+            )
+
+            with open(
+                summary_path,
+                "w",
+                newline="",
+                encoding="utf-8-sig",
+            ) as summary_file:
+                fieldnames = [
+                    "Employee Name",
+                    "Department",
+                    "Missed Lunch Dates",
+                    "Total Missed Lunches",
+                ]
+
+                writer = csv.DictWriter(
+                    summary_file,
+                    fieldnames=fieldnames,
+                )
+
+                writer.writeheader()
+                writer.writerows(summary_rows)
+
+            zip_path = os.path.join(
+                temp_folder,
+                "AD347_Forms_and_Summary.zip",
+            )
 
             with zipfile.ZipFile(zip_path, "w") as zip_file:
+                zip_file.write(
+                    summary_path,
+                    arcname="Lunch_Review_Summary.csv",
+                )
+
                 for pdf_file in pdf_files:
                     zip_file.write(
                         pdf_file,
@@ -113,7 +165,7 @@ def lunch_review():
             return send_file(
                 zip_path,
                 as_attachment=True,
-                download_name="AD347_Forms.zip",
+                download_name="AD347_Forms_and_Summary.zip",
             )
 
         except Exception as error:
