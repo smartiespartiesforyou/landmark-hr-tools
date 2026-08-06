@@ -6,21 +6,24 @@ from reportlab.pdfgen import canvas
 
 
 FIELDS = {
+    # Header values — positioned INSIDE the blue fields
     "facility": {
         "x": 180,
-        "y": 640,
+        "y": 659,
         "width": 350,
     },
     "employee": {
         "x": 195,
-        "y": 592,
+        "y": 611,
         "width": 205,
     },
     "department": {
         "x": 485,
-        "y": 592,
+        "y": 611,
         "width": 95,
     },
+
+    # DO NOT CHANGE — education section is positioned correctly
     "education": {
         "x": 58,
         "y": 445,
