@@ -1,84 +1,16 @@
-from flask import Flask, render_template, request
-from datetime import datetime, timedelta
+from flask import Flask, render_template, request, send_file
 import os
-import re
 import tempfile
+import zipfile
 import pdfplumber
+
+from tools.lunch_review import extract_employee_page, hours_between
+from tools.ad347_data import build_ad347_record
+from tools.pdf_generator import create_ad347_pdf
 
 app = Flask(__name__)
 
-
-def parse_time(value):
-    value = value.strip().lower()
-
-    if value.endswith("a"):
-        value = value[:-1] + "AM"
-    elif value.endswith("p"):
-        value = value[:-1] + "PM"
-
-    return datetime.strptime(value, "%I:%M%p")
-
-
-def hours_between(start_text, end_text):
-    start = parse_time(start_text)
-    end = parse_time(end_text)
-
-    if end <= start:
-        end += timedelta(days=1)
-
-    return (end - start).total_seconds() / 3600
-
-
-def extract_employee_page(text):
-    name_match = re.search(
-        r"Employee Timesheet.*?\n(.+?)\s+\(Employee Id:",
-        text,
-        re.DOTALL
-    )
-
-    department_match = re.search(r"Jobs \(HR\)\s+(.+)", text)
-
-    name = name_match.group(1).strip() if name_match else "Unknown Employee"
-    department = department_match.group(1).strip() if department_match else ""
-
-    shifts = {}
-    current_date = None
-
-    for line in text.splitlines():
-        line = line.strip()
-
-        if line.startswith("Week Total:") or line.startswith("Total:"):
-            break
-
-        dated_row = re.match(
-            r"^[A-Z][a-z]{2}\s+"
-            r"(\d{2}/\d{2}/\d{4})\s+"
-            r"(\d{2}:\d{2}[ap])\s+"
-            r"(?:[A-Z][a-z]{2}\s+)?"
-            r"(\d{2}:\d{2}[ap])\b",
-            line
-        )
-
-        continuation_row = re.match(
-            r"^(\d{2}:\d{2}[ap])\s+"
-            r"(?:[A-Z][a-z]{2}\s+)?"
-            r"(\d{2}:\d{2}[ap])\b",
-            line
-        )
-
-        if dated_row:
-            current_date = dated_row.group(1)
-
-            shifts.setdefault(current_date, []).append(
-                (dated_row.group(2), dated_row.group(3))
-            )
-
-        elif continuation_row and current_date:
-            shifts.setdefault(current_date, []).append(
-                (continuation_row.group(1), continuation_row.group(2))
-            )
-
-    return name, department, shifts
+TEMPLATE_PATH = "BLANK_AD347.pdf"
 
 
 @app.route("/")
@@ -88,27 +20,31 @@ def home():
 
 @app.route("/lunch-review", methods=["GET", "POST"])
 def lunch_review():
+
     if request.method == "POST":
+
         pdf = request.files.get("pdf")
 
         if not pdf or pdf.filename == "":
             return "No file selected"
 
-        temp_path = None
+        temp_pdf = None
+        temp_folder = None
 
         try:
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=".pdf"
-            ) as temp_file:
-                pdf.save(temp_file.name)
-                temp_path = temp_file.name
 
-            html = "<h2>Lunch Review</h2>"
-            no_lunch_count = 0
+            temp_folder = tempfile.mkdtemp()
 
-            with pdfplumber.open(temp_path) as document:
+            temp_pdf = os.path.join(temp_folder, "timesheets.pdf")
+            pdf.save(temp_pdf)
+
+            records = []
+            html = "<h2>Lunch Review Results</h2>"
+
+            with pdfplumber.open(temp_pdf) as document:
+
                 for page in document.pages:
+
                     text = page.extract_text() or ""
 
                     name, department, shifts = extract_employee_page(text)
@@ -121,6 +57,7 @@ def lunch_review():
                     employee_results = []
 
                     for work_date, segments in shifts.items():
+
                         total_hours = sum(
                             hours_between(start, end)
                             for start, end in segments
@@ -130,37 +67,88 @@ def lunch_review():
                             continue
 
                         if len(segments) >= 2:
-                            result = "✅ Lunch Taken"
+                            result = "Lunch Taken"
+
                         else:
-                            result = "❌ No Lunch"
-                            no_lunch_count += 1
+                            result = "No Lunch"
+
+                            records.append(
+                                build_ad347_record(
+                                    name=name,
+                                    department=department,
+                                    work_date=work_date,
+                                )
+                            )
 
                         employee_results.append(
-                            (work_date, total_hours, result)
+                            (
+                                work_date,
+                                total_hours,
+                                result,
+                            )
                         )
 
                     if employee_results:
+
                         html += f"<hr><h3>{name}</h3>"
                         html += f"<b>Department:</b> {department}<br><br>"
 
                         for work_date, total_hours, result in employee_results:
+
+                            icon = "✅" if result == "Lunch Taken" else "❌"
+
                             html += (
                                 f"{work_date} — "
                                 f"{total_hours:.2f} hours — "
-                                f"{result}<br>"
+                                f"{icon} {result}<br>"
                             )
 
-            html += f"<hr><h3>AD-347 dates found: {no_lunch_count}</h3>"
-            html += '<p><a href="/lunch-review">Upload another PDF</a></p>'
+            if not records:
 
-            return html
+                html += "<hr><h3>No AD-347 forms needed.</h3>"
+                html += '<p><a href="/lunch-review">Run another review</a></p>'
+
+                return html
+
+            pdf_files = []
+
+            for index, record in enumerate(records, start=1):
+
+                safe_name = record["employee_name"].replace(" ", "_")
+
+                output_path = os.path.join(
+                    temp_folder,
+                    f"{index}_{safe_name}_{record['date'].replace('/', '-')}.pdf",
+                )
+
+                create_ad347_pdf(
+                    record=record,
+                    template_path=TEMPLATE_PATH,
+                    output_path=output_path,
+                )
+
+                pdf_files.append(output_path)
+
+            zip_path = os.path.join(temp_folder, "AD347_Forms.zip")
+
+            with zipfile.ZipFile(zip_path, "w") as zip_file:
+
+                for pdf_file in pdf_files:
+
+                    zip_file.write(
+                        pdf_file,
+                        arcname=os.path.basename(pdf_file),
+                    )
+
+            return send_file(
+                zip_path,
+                as_attachment=True,
+                download_name="AD347_Forms.zip",
+            )
 
         except Exception as error:
-            return f"<h2>Error</h2><pre>{error}</pre>"
 
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                os.remove(temp_path)
+            return f"<h2>Error</h2><pre>{error}</pre>"
 
     return """
     <h2>Lunch Review</h2>
