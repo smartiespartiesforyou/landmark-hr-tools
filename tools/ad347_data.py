@@ -1,7 +1,7 @@
-def build_ad347_record(name, department, work_date):
+def build_ad347_record(name, department, dates):
     return {
         "facility": "Landmark South Nursing & Rehabilitation",
         "employee_name": name,
         "department": department,
-        "date": work_date,
+        "dates": dates,
     }
