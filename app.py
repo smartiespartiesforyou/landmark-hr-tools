@@ -1,4 +1,7 @@
 from flask import Flask, render_template, request, send_file
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
 import csv
 import os
 import tempfile
@@ -110,6 +113,84 @@ def build_preview_page(preview_rows):
     """
 
     return html
+
+
+def create_supervisor_pdf(grouped_records, output_path):
+    pdf = canvas.Canvas(output_path, pagesize=letter)
+
+    page_width, page_height = letter
+    y = page_height - 55
+
+    pdf.setTitle("Supervisor Missed Lunch List")
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(50, y, "Supervisor Missed Lunch List")
+
+    y -= 22
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(
+        50,
+        y,
+        "Employees with no recorded meal break on qualifying shifts"
+    )
+
+    y -= 30
+
+    sorted_records = sorted(
+        grouped_records.items(),
+        key=lambda item: (item[0][1], item[0][0]),
+    )
+
+    current_department = None
+
+    for (name, department), dates in sorted_records:
+        unique_dates = sorted(set(dates))
+
+        if department != current_department:
+            if y < 120:
+                pdf.showPage()
+                y = page_height - 55
+
+            pdf.setFont("Helvetica-Bold", 12)
+            pdf.drawString(50, y, department)
+            y -= 20
+            current_department = department
+
+        if y < 100:
+            pdf.showPage()
+            y = page_height - 55
+
+            pdf.setFont("Helvetica-Bold", 12)
+            pdf.drawString(50, y, department)
+            y -= 20
+
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(65, y, name)
+
+        y -= 15
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(
+            80,
+            y,
+            "Missed lunch date(s): " + ", ".join(unique_dates)
+        )
+
+        y -= 15
+        pdf.drawString(
+            80,
+            y,
+            f"Total missed lunches: {len(unique_dates)}"
+        )
+
+        y -= 22
+
+    pdf.setFont("Helvetica-Oblique", 8)
+    pdf.drawString(
+        50,
+        35,
+        "This list is for supervisor follow-up during the pay period."
+    )
+
+    pdf.save()
 
 
 def create_final_zip(grouped_records, temp_folder):
@@ -226,6 +307,29 @@ def lunch_review():
             if action == "preview":
                 return build_preview_page(preview_rows)
 
+            if action == "supervisor":
+                if not grouped_records:
+                    return """
+                    <h2>No missed lunches found.</h2>
+                    <p><a href="/lunch-review">Run another review</a></p>
+                    """
+
+                supervisor_path = os.path.join(
+                    temp_folder,
+                    "Supervisor_Missed_Lunch_List.pdf",
+                )
+
+                create_supervisor_pdf(
+                    grouped_records,
+                    supervisor_path,
+                )
+
+                return send_file(
+                    supervisor_path,
+                    as_attachment=True,
+                    download_name="Supervisor_Missed_Lunch_List.pdf",
+                )
+
             if action == "final":
                 if not grouped_records:
                     return """
@@ -268,13 +372,19 @@ def lunch_review():
 
         <br><br>
 
+        <button type="submit" name="action" value="supervisor">
+            Print Supervisor List
+        </button>
+
+        <br><br>
+
         <button type="submit" name="action" value="final">
             Generate Final AD-347 Forms
         </button>
     </form>
 
     <p>
-        Use Preview during the pay period.
+        Use Preview or Supervisor List during the pay period.
         Use Final only after the pay period is complete.
     </p>
 
