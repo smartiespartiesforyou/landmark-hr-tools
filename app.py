@@ -1,38 +1,10 @@
-from flask import Flask
+from flask import Flask, render_template
 
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return """
-    <h1>Landmark HR Tools</h1>
-    <hr>
-
-    <h2>Available Tools</h2>
-
-    <ul>
-        <li><a href="/lunch-review">🥪 Lunch Review</a></li>
-        <li><a href="/ad347">📄 AD-347 Generator</a></li>
-        <li><a href="/evaluations">👥 Evaluations</a></li>
-        <li><a href="/anniversaries">🎉 Anniversaries</a></li>
-    </ul>
-    """
-
-@app.route("/lunch-review")
-def lunch_review():
-    return "<h2>Lunch Review - Coming Soon</h2>"
-
-@app.route("/ad347")
-def ad347():
-    return "<h2>AD-347 Generator - Coming Soon</h2>"
-
-@app.route("/evaluations")
-def evaluations():
-    return "<h2>Evaluations - Coming Soon</h2>"
-
-@app.route("/anniversaries")
-def anniversaries():
-    return "<h2>Anniversaries - Coming Soon</h2>"
+    return render_template("index.html")
 
 if __name__ == "__main__":
     app.run(debug=True)
