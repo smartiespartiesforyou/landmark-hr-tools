@@ -28,22 +28,33 @@ def lunch_review():
         filepath = os.path.join(UPLOAD_FOLDER, pdf.filename)
         pdf.save(filepath)
 
+        employee_names = []
+
         with pdfplumber.open(filepath) as document:
-            first_page_text = document.pages[0].extract_text() or ""
+            for page in document.pages:
+                page_text = page.extract_text() or ""
 
-        match = re.search(
-            r"Employee Timesheet.*?\n(.+?)\s+\(Employee Id:",
-            first_page_text,
-            re.DOTALL
-        )
+                match = re.search(
+                    r"Employee Timesheet.*?\n(.+?)\s+\(Employee Id:",
+                    page_text,
+                    re.DOTALL
+                )
 
-        employee_name = match.group(1).strip() if match else "Employee not found"
+                if match:
+                    employee_names.append(match.group(1).strip())
 
         os.remove(filepath)
 
+        employee_list = "".join(
+            f"<li>{name}</li>" for name in employee_names
+        )
+
         return f"""
         <h2>PDF Read Successfully</h2>
-        <p>First employee: <strong>{employee_name}</strong></p>
+        <p>Employees found: <strong>{len(employee_names)}</strong></p>
+        <ul>
+            {employee_list}
+        </ul>
         <p><a href="/lunch-review">Upload another PDF</a></p>
         """
 
