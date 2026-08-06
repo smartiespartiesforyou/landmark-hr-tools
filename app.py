@@ -9,7 +9,14 @@ app = Flask(__name__)
 
 
 def parse_time(value):
-    return datetime.strptime(value.lower(), "%I:%M%p")
+    value = value.strip().lower()
+
+    if value.endswith("a"):
+        value = value[:-1] + "AM"
+    elif value.endswith("p"):
+        value = value[:-1] + "PM"
+
+    return datetime.strptime(value, "%I:%M%p")
 
 
 def hours_between(start_text, end_text):
@@ -61,19 +68,14 @@ def extract_employee_page(text):
 
         if dated_row:
             current_date = dated_row.group(1)
-            start_time = dated_row.group(2)
-            end_time = dated_row.group(3)
 
             shifts.setdefault(current_date, []).append(
-                (start_time, end_time)
+                (dated_row.group(2), dated_row.group(3))
             )
 
         elif continuation_row and current_date:
-            start_time = continuation_row.group(1)
-            end_time = continuation_row.group(2)
-
             shifts.setdefault(current_date, []).append(
-                (start_time, end_time)
+                (continuation_row.group(1), continuation_row.group(2))
             )
 
     return name, department, shifts
@@ -103,7 +105,7 @@ def lunch_review():
                 temp_path = temp_file.name
 
             html = "<h2>Lunch Review</h2>"
-            qualifying_count = 0
+            no_lunch_count = 0
 
             with pdfplumber.open(temp_path) as document:
                 for page in document.pages:
@@ -131,14 +133,10 @@ def lunch_review():
                             result = "✅ Lunch Taken"
                         else:
                             result = "❌ No Lunch"
-                            qualifying_count += 1
+                            no_lunch_count += 1
 
                         employee_results.append(
-                            (
-                                work_date,
-                                total_hours,
-                                result
-                            )
+                            (work_date, total_hours, result)
                         )
 
                     if employee_results:
@@ -152,14 +150,13 @@ def lunch_review():
                                 f"{result}<br>"
                             )
 
-            html += (
-                f"<hr><h3>AD-347 dates found: "
-                f"{qualifying_count}</h3>"
-            )
-
+            html += f"<hr><h3>AD-347 dates found: {no_lunch_count}</h3>"
             html += '<p><a href="/lunch-review">Upload another PDF</a></p>'
 
             return html
+
+        except Exception as error:
+            return f"<h2>Error</h2><pre>{error}</pre>"
 
         finally:
             if temp_path and os.path.exists(temp_path):
