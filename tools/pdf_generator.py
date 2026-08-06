@@ -7,28 +7,24 @@ from reportlab.pdfgen import canvas
 
 FIELDS = {
     "facility": {
-        "x": 165,
-        "y": 648,
-        "width": 365,
-        "height": 20,
+        "x": 180,
+        "y": 640,
+        "width": 350,
     },
     "employee": {
-        "x": 175,
-        "y": 601,
-        "width": 225,
-        "height": 20,
+        "x": 195,
+        "y": 592,
+        "width": 205,
     },
     "department": {
-        "x": 470,
-        "y": 601,
-        "width": 110,
-        "height": 20,
+        "x": 485,
+        "y": 592,
+        "width": 95,
     },
     "education": {
         "x": 58,
         "y": 445,
         "width": 490,
-        "height": 245,
     },
 }
 
@@ -71,17 +67,13 @@ def wrap_text(text, font_name, font_size, maximum_width):
     return lines
 
 
-def draw_field(
-    pdf_canvas,
-    text,
-    field,
-    font_name="Helvetica",
-    maximum_font_size=10,
-):
+def draw_field(pdf_canvas, text, field):
+    font_name = "Helvetica"
+
     font_size = fit_font_size(
         text=text,
         font_name=font_name,
-        maximum_size=maximum_font_size,
+        maximum_size=11,
         maximum_width=field["width"],
     )
 
@@ -109,9 +101,7 @@ def draw_education_box(pdf_canvas, dates):
     text_object.setFont(font_name, font_size)
     text_object.setLeading(line_height)
 
-    opening = (
-        "Our records indicate that on the following date(s):"
-    )
+    opening = "Our records indicate that on the following date(s):"
 
     for line in wrap_text(
         opening,
@@ -124,7 +114,7 @@ def draw_education_box(pdf_canvas, dates):
     text_object.textLine("")
 
     for missed_date in dates:
-        text_object.textLine(f"• {missed_date}")
+        text_object.textLine(f"- {missed_date}")
 
     text_object.textLine("")
 
