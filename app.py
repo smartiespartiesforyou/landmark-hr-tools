@@ -32,22 +32,34 @@ def lunch_review():
 
                 text = page.extract_text() or ""
 
-                name = re.search(r"Employee Timesheet.*?\n(.+?)\s+\(Employee Id:", text, re.DOTALL)
-                dept = re.search(r"Jobs \(HR\)\s+(.+)", text)
+                name = re.search(
+                    r"Employee Timesheet.*?\n(.+?)\s+\(Employee Id:",
+                    text,
+                    re.DOTALL
+                )
 
                 if name:
                     html += f"<hr><h3>{name.group(1).strip()}</h3>"
 
-                if dept:
-                    html += f"<b>Department:</b> {dept.group(1).strip()}<br><br>"
+                dates = re.findall(r"\d{2}/\d{2}/\d{4}", text)
 
-                punches = re.findall(
-                    r"([A-Z][a-z]{2})\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2}[ap])\s+(\d{2}:\d{2}[ap])",
-                    text
-                )
+                counts = {}
 
-                for punch in punches:
-                    html += f"{punch[1]} &nbsp;&nbsp; {punch[2]} → {punch[3]}<br>"
+                for d in dates:
+                    counts[d] = counts.get(d, 0) + 1
+
+                for d, c in counts.items():
+
+                    if c == 1:
+                        result = "❌ No Lunch"
+
+                    elif c == 2:
+                        result = "✅ Lunch Taken"
+
+                    else:
+                        result = "🟡 Review"
+
+                    html += f"{d} — {result}<br>"
 
         os.remove(filepath)
 
