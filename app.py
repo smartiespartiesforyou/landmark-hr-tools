@@ -32,6 +32,13 @@ def lunch_review():
 
                 text = page.extract_text() or ""
 
+                dept = re.search(r"Jobs \(HR\)\s+(.+)", text)
+
+                department = dept.group(1).strip() if dept else ""
+
+                if "LPN" in department.upper() or "RGN" in department.upper():
+                    continue
+
                 name = re.search(
                     r"Employee Timesheet.*?\n(.+?)\s+\(Employee Id:",
                     text,
@@ -52,10 +59,8 @@ def lunch_review():
 
                     if c == 1:
                         result = "❌ No Lunch"
-
                     elif c == 2:
                         result = "✅ Lunch Taken"
-
                     else:
                         result = "🟡 Review"
 
