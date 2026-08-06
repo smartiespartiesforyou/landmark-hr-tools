@@ -15,22 +15,35 @@ def home():
 def lunch_review():
 
     if request.method == "POST":
+        if "pdf" not in request.files:
+            return "No file selected"
 
         pdf = request.files["pdf"]
 
-        if pdf.filename != "":
-            pdf.save(os.path.join(UPLOAD_FOLDER, pdf.filename))
-            return "<h2>Upload Successful!</h2>"
+        if pdf.filename == "":
+            return "No file selected"
+
+        filepath = os.path.join(UPLOAD_FOLDER, pdf.filename)
+        pdf.save(filepath)
+
+        return f"<h2>Upload Successful!</h2><p>{pdf.filename}</p>"
 
     return """
-    <h2>Lunch Review</h2>
+<!DOCTYPE html>
+<html>
+<body>
 
-    <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="pdf">
-        <br><br>
-        <button type="submit">Upload PDF</button>
-    </form>
-    """
+<h2>Lunch Review</h2>
+
+<form method="POST" enctype="multipart/form-data">
+    <input type="file" name="pdf">
+    <br><br>
+    <input type="submit" value="Upload PDF">
+</form>
+
+</body>
+</html>
+"""
 
 
 @app.route("/ad347")
