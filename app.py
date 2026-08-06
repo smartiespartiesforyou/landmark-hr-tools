@@ -1,10 +1,13 @@
 from flask import Flask, render_template, request
 import os
+import re
+import pdfplumber
 
 app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 @app.route("/")
 def home():
@@ -13,7 +16,6 @@ def home():
 
 @app.route("/lunch-review", methods=["GET", "POST"])
 def lunch_review():
-
     if request.method == "POST":
         if "pdf" not in request.files:
             return "No file selected"
@@ -26,24 +28,43 @@ def lunch_review():
         filepath = os.path.join(UPLOAD_FOLDER, pdf.filename)
         pdf.save(filepath)
 
-        return f"<h2>Upload Successful!</h2><p>{pdf.filename}</p>"
+        with pdfplumber.open(filepath) as document:
+            first_page_text = document.pages[0].extract_text() or ""
+
+        match = re.search(
+            r"Employee Timesheet.*?\n(.+?)\s+\(Employee Id:",
+            first_page_text,
+            re.DOTALL
+        )
+
+        employee_name = match.group(1).strip() if match else "Employee not found"
+
+        os.remove(filepath)
+
+        return f"""
+        <h2>PDF Read Successfully</h2>
+        <p>First employee: <strong>{employee_name}</strong></p>
+        <p><a href="/lunch-review">Upload another PDF</a></p>
+        """
 
     return """
-<!DOCTYPE html>
-<html>
-<body>
+    <!DOCTYPE html>
+    <html>
+    <body>
 
-<h2>Lunch Review</h2>
+    <h2>Lunch Review</h2>
 
-<form method="POST" enctype="multipart/form-data">
-    <input type="file" name="pdf">
-    <br><br>
-    <input type="submit" value="Upload PDF">
-</form>
+    <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="pdf" accept=".pdf">
+        <br><br>
+        <input type="submit" value="Upload PDF">
+    </form>
 
-</body>
-</html>
-"""
+    <p><a href="/">Back to Home</a></p>
+
+    </body>
+    </html>
+    """
 
 
 @app.route("/ad347")
