@@ -33,10 +33,6 @@ def review_timesheets(pdf_path):
             text = page.extract_text() or ""
 
             name, department, shifts = extract_employee_page(text)
-            department_upper = department.upper()
-
-            if "LPN" in department_upper or "RGN" in department_upper:
-                continue
 
             missed_dates = []
 
