@@ -14,18 +14,30 @@
 </head>
 <body>
     <h1>TalentLMS In-Service Checker</h1>
-    <p>Compare the active UKG employee list with one month's TalentLMS in-service report.</p>
+    <p>Compare the UKG employee list with a TalentLMS in-service report.</p>
 
     <div class="card">
         <form method="POST" enctype="multipart/form-data">
-            <label for="ukg_file">1. UKG Employee Excel Report</label>
+            <label>1. In-Service Type</label>
+            <label style="font-weight:normal; margin-top:8px;">
+                <input type="radio" name="check_type" value="monthly" checked onchange="toggleMonth()">
+                Monthly In-Service
+            </label>
+            <label style="font-weight:normal; margin-top:6px;">
+                <input type="radio" name="check_type" value="extra" onchange="toggleMonth()">
+                Extra In-Service
+            </label>
+
+            <label for="ukg_file">2. UKG Employee Excel Report</label>
             <input id="ukg_file" type="file" name="ukg_file" accept=".xlsx" required>
 
-            <label for="talent_file">2. TalentLMS In-Service Report</label>
+            <label for="talent_file">3. TalentLMS In-Service Report</label>
             <input id="talent_file" type="file" name="talent_file" accept=".csv" required>
 
-            <label for="month">3. In-Service Month</label>
+            <div id="month_section">
+            <label for="month">4. In-Service Month</label>
             <input id="month" type="month" name="month" required>
+            </div>
 
             <br>
             <button type="submit" name="action" value="check_names">Check Names First</button>
@@ -34,6 +46,18 @@
     </div>
 
     <p class="note">Always use <b>Check Names First</b>. If a likely name difference is found, correct the name in TalentLMS, export the report again, and rerun the check before printing.</p>
+    <p class="note"><b>Extra In-Service</b> is for one-time courses such as dementia, respiratory, or another course that is not part of the monthly series. No course name is required.</p>
     <p><a href="/">Home</a></p>
+
+    <script>
+        function toggleMonth() {
+            const isMonthly = document.querySelector('input[name="check_type"]:checked').value === 'monthly';
+            const section = document.getElementById('month_section');
+            const month = document.getElementById('month');
+            section.style.display = isMonthly ? 'block' : 'none';
+            month.required = isMonthly;
+        }
+        toggleMonth();
+    </script>
 </body>
 </html>
