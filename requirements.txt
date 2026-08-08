@@ -4,3 +4,4 @@ pdfplumber
 pypdf
 reportlab
 openpyxl
+python-docx
