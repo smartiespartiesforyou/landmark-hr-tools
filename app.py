@@ -1,17 +1,25 @@
 from flask import Flask, render_template, request, send_file
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+from reportlab.lib.colors import HexColor
 
 import csv
 import os
 import tempfile
 import zipfile
+from datetime import datetime
 
 import pdfplumber
 
 from tools.lunch_review import extract_employee_page, hours_between
 from tools.ad347_data import build_ad347_record
 from tools.pdf_generator import create_ad347_pdf
+from tools.talent_lms import (
+    build_incomplete_list,
+    find_possible_name_mismatches,
+    read_talent_lms,
+    read_ukg_employees,
+)
 
 
 app = Flask(__name__)
@@ -386,6 +394,157 @@ def lunch_review():
 
     <p><a href="/">Home</a></p>
     """
+
+
+def create_talent_lms_pdf(incomplete, month_label, eligible_count, completed_count, output_path):
+    pdf = canvas.Canvas(output_path, pagesize=letter)
+    page_width, page_height = letter
+
+    def draw_header():
+        pdf.setFillColor(HexColor("#1F4E78"))
+        pdf.rect(0, page_height - 82, page_width, 82, fill=1, stroke=0)
+        pdf.setFillColorRGB(1, 1, 1)
+        pdf.setFont("Helvetica-Bold", 17)
+        pdf.drawString(42, page_height - 43, f"{month_label} In-Service — Not Completed")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(
+            42,
+            page_height - 63,
+            f"Eligible: {eligible_count}   Completed: {completed_count}   Not completed: {len(incomplete)}",
+        )
+        pdf.setFillColorRGB(0, 0, 0)
+        return page_height - 108
+
+    y = draw_header()
+    current_department = None
+
+    if not incomplete:
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(42, y, "Everyone required for this month has a completed record.")
+    else:
+        for employee in incomplete:
+            department = employee["department"] or "No Department"
+
+            if y < 72:
+                pdf.showPage()
+                y = draw_header()
+                current_department = None
+
+            if department != current_department:
+                if y < 100:
+                    pdf.showPage()
+                    y = draw_header()
+                pdf.setFont("Helvetica-Bold", 11)
+                pdf.setFillColor(HexColor("#1F4E78"))
+                pdf.drawString(42, y, department)
+                pdf.setFillColorRGB(0, 0, 0)
+                y -= 18
+                current_department = department
+
+            pdf.setFont("Helvetica", 10)
+            pdf.drawString(56, y, employee["display_name"])
+            if employee["job"]:
+                pdf.setFillColor(HexColor("#666666"))
+                pdf.drawRightString(page_width - 44, y, employee["job"])
+                pdf.setFillColorRGB(0, 0, 0)
+            y -= 17
+
+    pdf.setFont("Helvetica-Oblique", 8)
+    pdf.setFillColor(HexColor("#666666"))
+    pdf.drawString(42, 32, "For supervisor follow-up. UKG employment dates determine monthly eligibility.")
+    pdf.save()
+
+
+@app.route("/talent-lms", methods=["GET", "POST"])
+def talent_lms():
+    if request.method == "GET":
+        return render_template("talent_lms.html")
+
+    ukg_file = request.files.get("ukg_file")
+    talent_file = request.files.get("talent_file")
+    month_value = request.form.get("month", "")
+    action = request.form.get("action")
+
+    if not ukg_file or not talent_file:
+        return "<h2>Error</h2><p>Both files are required.</p><p><a href='/talent-lms'>Try again</a></p>", 400
+
+    try:
+        year_text, month_text = month_value.split("-", 1)
+        year = int(year_text)
+        month = int(month_text)
+        month_date = datetime(year, month, 1)
+    except (ValueError, AttributeError):
+        return "<h2>Error</h2><p>Select the in-service month.</p><p><a href='/talent-lms'>Try again</a></p>", 400
+
+    temp_folder = tempfile.mkdtemp()
+    ukg_path = os.path.join(temp_folder, "employees.xlsx")
+    talent_path = os.path.join(temp_folder, "talent.csv")
+    ukg_file.save(ukg_path)
+    talent_file.save(talent_path)
+
+    try:
+        employees = read_ukg_employees(ukg_path, year, month)
+        talent_records = read_talent_lms(talent_path)
+        mismatches = find_possible_name_mismatches(employees, talent_records)
+        incomplete, completed_count = build_incomplete_list(employees, talent_records)
+        month_label = month_date.strftime("%B %Y")
+
+        if action == "check_names":
+            if mismatches:
+                rows = "".join(
+                    f"<tr><td>{item['ukg_name']}</td><td>{item['talent_name']}</td><td>{item['talent_status']}</td></tr>"
+                    for item in mismatches
+                )
+                return f"""
+                <h2>{month_label} — Name Check</h2>
+                <p><b>{len(employees)}</b> employees were employed by the end of this month.</p>
+                <div style="background:#fff3cd;padding:14px;max-width:760px">
+                    <b>Possible name mismatch found.</b> Correct it in TalentLMS if these are the same person,
+                    export the course report again, and rerun Check Names.
+                </div>
+                <table border="1" cellpadding="8" cellspacing="0" style="margin-top:18px;border-collapse:collapse">
+                    <tr><th>UKG Name</th><th>TalentLMS Name</th><th>TalentLMS Status</th></tr>
+                    {rows}
+                </table>
+                <p><a href="/talent-lms">Run again</a> | <a href="/">Home</a></p>
+                """
+
+            return f"""
+            <h2>{month_label} — Name Check Passed ✅</h2>
+            <p>No likely name differences were found between UKG and TalentLMS.</p>
+            <p><b>{len(employees)}</b> employees were eligible for this month's in-service.</p>
+            <p><b>{completed_count}</b> have a completed record.</p>
+            <p><b>{len(incomplete)}</b> will appear on the Not Completed list.</p>
+            <p><a href="/talent-lms">Go back and create the printable list</a></p>
+            """
+
+        if action == "print_list":
+            if mismatches:
+                return f"""
+                <h2>Printable list stopped</h2>
+                <p><b>{len(mismatches)} possible name mismatch(es) need review first.</b></p>
+                <p>Use <a href="/talent-lms">Check Names First</a>, correct TalentLMS if needed, and re-export the report.</p>
+                """, 400
+
+            pdf_path = os.path.join(temp_folder, "TalentLMS_Not_Completed.pdf")
+            create_talent_lms_pdf(
+                incomplete,
+                month_label,
+                len(employees),
+                completed_count,
+                pdf_path,
+            )
+            safe_month = month_date.strftime("%Y-%m")
+            return send_file(
+                pdf_path,
+                as_attachment=True,
+                download_name=f"TalentLMS_{safe_month}_Not_Completed.pdf",
+            )
+
+        return "<h2>Error</h2><p>No action selected.</p>", 400
+
+    except Exception as error:
+        return f"<h2>Error</h2><pre>{error}</pre><p><a href='/talent-lms'>Try again</a></p>", 400
 
 
 @app.route("/ad347")
