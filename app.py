@@ -1,15 +1,17 @@
 from flask import Flask, render_template, request, send_file
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from reportlab.lib.colors import HexColor
 
 import csv
 import os
 import tempfile
 import zipfile
-from datetime import datetime
+from datetime import date, datetime
 
 import pdfplumber
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
 
 from tools.lunch_review import extract_employee_page, hours_between
 from tools.ad347_data import build_ad347_record
@@ -396,63 +398,73 @@ def lunch_review():
     """
 
 
-def create_talent_lms_pdf(incomplete, month_label, eligible_count, completed_count, output_path):
-    pdf = canvas.Canvas(output_path, pagesize=letter)
-    page_width, page_height = letter
+def create_talent_lms_docx(incomplete, report_label, eligible_count, completed_count, output_path):
+    document = Document()
+    section = document.sections[0]
+    section.top_margin = Inches(1)
+    section.right_margin = Inches(1)
+    section.bottom_margin = Inches(1)
+    section.left_margin = Inches(1)
 
-    def draw_header():
-        pdf.setFillColor(HexColor("#1F4E78"))
-        pdf.rect(0, page_height - 82, page_width, 82, fill=1, stroke=0)
-        pdf.setFillColorRGB(1, 1, 1)
-        pdf.setFont("Helvetica-Bold", 17)
-        pdf.drawString(42, page_height - 43, f"{month_label} In-Service — Not Completed")
-        pdf.setFont("Helvetica", 9)
-        pdf.drawString(
-            42,
-            page_height - 63,
-            f"Eligible: {eligible_count}   Completed: {completed_count}   Not completed: {len(incomplete)}",
-        )
-        pdf.setFillColorRGB(0, 0, 0)
-        return page_height - 108
+    normal = document.styles["Normal"]
+    normal.font.name = "Calibri"
+    normal.font.size = Pt(11)
+    normal.paragraph_format.space_after = Pt(6)
+    normal.paragraph_format.line_spacing = 1.1
 
-    y = draw_header()
-    current_department = None
+    title = document.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    title.paragraph_format.space_after = Pt(6)
+    title_run = title.add_run(f"{report_label} — Not Completed")
+    title_run.bold = True
+    title_run.font.name = "Calibri"
+    title_run.font.size = Pt(18)
+    title_run.font.color.rgb = None
+
+    summary = document.add_paragraph()
+    summary.paragraph_format.space_after = Pt(12)
+    summary.add_run(
+        f"Eligible: {eligible_count}    "
+        f"Completed: {completed_count}    "
+        f"Not completed: {len(incomplete)}"
+    ).bold = True
+
+    note = document.add_paragraph(
+        "Editable follow-up list. Delete any employee who should not be included before printing or sharing."
+    )
+    note.paragraph_format.space_after = Pt(16)
 
     if not incomplete:
-        pdf.setFont("Helvetica-Bold", 12)
-        pdf.drawString(42, y, "Everyone required for this month has a completed record.")
+        document.add_paragraph("No employees are currently listed as not completed.")
     else:
+        current_department = None
         for employee in incomplete:
             department = employee["department"] or "No Department"
 
-            if y < 72:
-                pdf.showPage()
-                y = draw_header()
-                current_department = None
-
             if department != current_department:
-                if y < 100:
-                    pdf.showPage()
-                    y = draw_header()
-                pdf.setFont("Helvetica-Bold", 11)
-                pdf.setFillColor(HexColor("#1F4E78"))
-                pdf.drawString(42, y, department)
-                pdf.setFillColorRGB(0, 0, 0)
-                y -= 18
+                heading = document.add_paragraph()
+                heading.paragraph_format.space_before = Pt(10)
+                heading.paragraph_format.space_after = Pt(4)
+                heading_run = heading.add_run(department)
+                heading_run.bold = True
+                heading_run.font.size = Pt(13)
                 current_department = department
 
-            pdf.setFont("Helvetica", 10)
-            pdf.drawString(56, y, employee["display_name"])
+            employee_line = employee["display_name"]
             if employee["job"]:
-                pdf.setFillColor(HexColor("#666666"))
-                pdf.drawRightString(page_width - 44, y, employee["job"])
-                pdf.setFillColorRGB(0, 0, 0)
-            y -= 17
+                employee_line += f" — {employee['job']}"
 
-    pdf.setFont("Helvetica-Oblique", 8)
-    pdf.setFillColor(HexColor("#666666"))
-    pdf.drawString(42, 32, "For supervisor follow-up. UKG employment dates determine monthly eligibility.")
-    pdf.save()
+            paragraph = document.add_paragraph(employee_line)
+            paragraph.paragraph_format.left_indent = Inches(0.15)
+            paragraph.paragraph_format.space_after = Pt(4)
+
+    footer = section.footer.paragraphs[0]
+    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    footer_run = footer.add_run("For supervisor follow-up. UKG is the employee master list.")
+    footer_run.font.name = "Calibri"
+    footer_run.font.size = Pt(8)
+
+    document.save(output_path)
 
 
 @app.route("/talent-lms", methods=["GET", "POST"])
@@ -462,19 +474,32 @@ def talent_lms():
 
     ukg_file = request.files.get("ukg_file")
     talent_file = request.files.get("talent_file")
+    check_type = request.form.get("check_type", "monthly")
     month_value = request.form.get("month", "")
     action = request.form.get("action")
 
     if not ukg_file or not talent_file:
         return "<h2>Error</h2><p>Both files are required.</p><p><a href='/talent-lms'>Try again</a></p>", 400
 
-    try:
-        year_text, month_text = month_value.split("-", 1)
-        year = int(year_text)
-        month = int(month_text)
-        month_date = datetime(year, month, 1)
-    except (ValueError, AttributeError):
-        return "<h2>Error</h2><p>Select the in-service month.</p><p><a href='/talent-lms'>Try again</a></p>", 400
+    if check_type == "extra":
+        today = date.today()
+        year = today.year
+        month = today.month
+        report_label = "Extra In-Service"
+        download_label = "Extra_InService"
+    elif check_type == "monthly":
+        try:
+            year_text, month_text = month_value.split("-", 1)
+            year = int(year_text)
+            month = int(month_text)
+            month_date = datetime(year, month, 1)
+        except (ValueError, AttributeError):
+            return "<h2>Error</h2><p>Select the in-service month.</p><p><a href='/talent-lms'>Try again</a></p>", 400
+
+        report_label = f"{month_date.strftime('%B %Y')} In-Service"
+        download_label = f"TalentLMS_{month_date.strftime('%Y-%m')}"
+    else:
+        return "<h2>Error</h2><p>Choose Monthly In-Service or Extra In-Service.</p><p><a href='/talent-lms'>Try again</a></p>", 400
 
     temp_folder = tempfile.mkdtemp()
     ukg_path = os.path.join(temp_folder, "employees.xlsx")
@@ -487,7 +512,6 @@ def talent_lms():
         talent_records = read_talent_lms(talent_path)
         mismatches = find_possible_name_mismatches(employees, talent_records)
         incomplete, completed_count = build_incomplete_list(employees, talent_records)
-        month_label = month_date.strftime("%B %Y")
 
         if action == "check_names":
             if mismatches:
@@ -496,7 +520,7 @@ def talent_lms():
                     for item in mismatches
                 )
                 return f"""
-                <h2>{month_label} — Name Check</h2>
+                <h2>{report_label} — Name Check</h2>
                 <p><b>{len(employees)}</b> employees were employed by the end of this month.</p>
                 <div style="background:#fff3cd;padding:14px;max-width:760px">
                     <b>Possible name mismatch found.</b> Correct it in TalentLMS if these are the same person,
@@ -510,35 +534,35 @@ def talent_lms():
                 """
 
             return f"""
-            <h2>{month_label} — Name Check Passed ✅</h2>
+            <h2>{report_label} — Name Check Passed ✅</h2>
             <p>No likely name differences were found between UKG and TalentLMS.</p>
-            <p><b>{len(employees)}</b> employees were eligible for this month's in-service.</p>
+            <p><b>{len(employees)}</b> employees were included in this check.</p>
             <p><b>{completed_count}</b> have a completed record.</p>
             <p><b>{len(incomplete)}</b> will appear on the Not Completed list.</p>
-            <p><a href="/talent-lms">Go back and create the printable list</a></p>
+            <p><a href="/talent-lms">Go back and download the editable Word list</a></p>
             """
 
-        if action == "print_list":
+        if action == "word_list":
             if mismatches:
                 return f"""
-                <h2>Printable list stopped</h2>
+                <h2>Word list stopped</h2>
                 <p><b>{len(mismatches)} possible name mismatch(es) need review first.</b></p>
                 <p>Use <a href="/talent-lms">Check Names First</a>, correct TalentLMS if needed, and re-export the report.</p>
                 """, 400
 
-            pdf_path = os.path.join(temp_folder, "TalentLMS_Not_Completed.pdf")
-            create_talent_lms_pdf(
+            docx_path = os.path.join(temp_folder, "TalentLMS_Not_Completed.docx")
+            create_talent_lms_docx(
                 incomplete,
-                month_label,
+                report_label,
                 len(employees),
                 completed_count,
-                pdf_path,
+                docx_path,
             )
-            safe_month = month_date.strftime("%Y-%m")
             return send_file(
-                pdf_path,
+                docx_path,
                 as_attachment=True,
-                download_name=f"TalentLMS_{safe_month}_Not_Completed.pdf",
+                download_name=f"{download_label}_Not_Completed.docx",
+                mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
 
         return "<h2>Error</h2><p>No action selected.</p>", 400
