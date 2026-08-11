@@ -46,7 +46,14 @@ def extract_employee_page(text):
 
         line = line.strip()
 
-        if line.startswith("Week Total:") or line.startswith("Total:"):
+        # A timesheet can contain more than one week.  A Week Total is only a
+        # subtotal, so skip it and continue reading the remaining dated rows.
+        if line.startswith("Week Total:"):
+            current_date = None
+            continue
+
+        # The unqualified Total row is the final total for this employee page.
+        if line.startswith("Total:"):
             break
 
         dated_row = re.match(
