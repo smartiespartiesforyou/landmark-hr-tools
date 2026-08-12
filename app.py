@@ -12,6 +12,8 @@ from datetime import datetime
 import pdfplumber
 
 from tools.lunch_review import extract_employee_page, hours_between
+from tools.attendance_review import build_daily_review
+from tools.attendance_pdf import create_attendance_pdf
 from tools.ad347_data import build_ad347_record
 from tools.pdf_generator import create_ad347_pdf
 from tools.talent_lms import (
@@ -25,6 +27,61 @@ from tools.talent_lms import (
 app = Flask(__name__)
 
 TEMPLATE_PATH = "BLANK_AD347.pdf"
+
+
+@app.route("/attendance-review", methods=["GET", "POST"])
+def attendance_review():
+    if request.method == "GET":
+        return render_template("attendance_review.html")
+
+    exception_file = request.files.get("exception_file")
+    lunch_file = request.files.get("lunch_file")
+
+    if not exception_file or not lunch_file:
+        return "<h2>Error</h2><p>Both Excel reports are required.</p>", 400
+
+    temp_folder = tempfile.mkdtemp()
+    exception_path = os.path.join(temp_folder, "exception_report.xlsx")
+    lunch_path = os.path.join(temp_folder, "lunch_report.xlsx")
+    exception_file.save(exception_path)
+    lunch_file.save(lunch_path)
+
+    try:
+        report_date, rows, missing_punches = build_daily_review(
+            exception_path,
+            lunch_path,
+        )
+
+        if missing_punches:
+            names = "".join(f"<li>{name}</li>" for name in missing_punches)
+            return f"""
+                <h2>Fix missing punches first</h2>
+                <p>The report was stopped because these employees still have a missing punch:</p>
+                <ul>{names}</ul>
+                <p>Correct them in UKG, rerun both reports, and upload them again.</p>
+                <p><a href='/attendance-review'>Try again</a></p>
+            """, 400
+
+        output_path = os.path.join(
+            temp_folder,
+            "Daily_Attendance_Exception_Report.pdf",
+        )
+        create_attendance_pdf(report_date, rows, output_path)
+
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name=(
+                f"Daily_Attendance_Exceptions_{report_date.isoformat()}.pdf"
+            ),
+            mimetype="application/pdf",
+        )
+    except Exception as error:
+        return f"""
+            <h2>Error</h2>
+            <p>{error}</p>
+            <p><a href='/attendance-review'>Try again</a></p>
+        """, 400
 
 
 @app.route("/")
