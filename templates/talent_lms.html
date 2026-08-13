@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TalentLMS In-Service Checker</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #222; }
+        .card { border: 1px solid #ccc; border-radius: 8px; padding: 24px; margin: 20px 0; }
+        .drop-box { border: 2px dashed #8a8a8a; border-radius: 8px; padding: 42px 20px; text-align: center; cursor: pointer; background: #fafafa; }
+        .drop-box.dragging { border-color: #174f79; background: #eef5fa; }
+        .drop-box input { display: none; }
+        .drop-title { font-size: 18px; font-weight: bold; margin: 0 0 8px; }
+        .drop-note { color: #555; margin: 0; }
+        .file-list { margin-top: 14px; line-height: 1.6; }
+        label { display: block; font-weight: bold; margin-top: 22px; }
+        input[type="month"] { margin-top: 7px; padding: 6px; }
+        button { display: block; margin-top: 24px; padding: 11px 18px; font-weight: bold; cursor: pointer; }
+        a { color: #174f79; }
+    </style>
+</head>
+<body>
+    <h1>TalentLMS In-Service Checker</h1>
+    <p>Compare the UKG employee list with a TalentLMS in-service report.</p>
+
+    <div class="card">
+        <form method="POST" enctype="multipart/form-data">
+            <label class="drop-box" id="drop_box" for="report_files">
+                <input id="report_files" type="file" name="report_files" accept=".xlsx,.csv" multiple required>
+                <p class="drop-title">Drop both files here</p>
+                <p class="drop-note">UKG Excel report + TalentLMS CSV report<br>or click to choose the files</p>
+                <div class="file-list" id="file_list"></div>
+            </label>
+
+            <label for="month">In-Service Month</label>
+            <input id="month" type="month" name="month" required>
+
+            <button type="submit">Create Printable List</button>
+        </form>
+    </div>
+
+    <p><a href="/">Home</a></p>
+
+    <script>
+        const dropBox = document.getElementById("drop_box");
+        const fileInput = document.getElementById("report_files");
+        const fileList = document.getElementById("file_list");
+
+        function showFiles() {
+            const names = Array.from(fileInput.files).map(file => file.name);
+            fileList.innerHTML = names.length
+                ? names.map(name => `<div>${name}</div>`).join("")
+                : "";
+        }
+
+        fileInput.addEventListener("change", showFiles);
+        dropBox.addEventListener("dragover", event => {
+            event.preventDefault();
+            dropBox.classList.add("dragging");
+        });
+        dropBox.addEventListener("dragleave", () => dropBox.classList.remove("dragging"));
+        dropBox.addEventListener("drop", event => {
+            event.preventDefault();
+            dropBox.classList.remove("dragging");
+            fileInput.files = event.dataTransfer.files;
+            showFiles();
+        });
+    </script>
+</body>
+</html>
