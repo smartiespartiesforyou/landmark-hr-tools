@@ -1,1 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PBJ Agency Hours</title>
+  <style>
+    :root { font-family: Arial, Helvetica, sans-serif; color: #222; }
+    body { margin: 0; background: #f6f7f8; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 48px; }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    .sub { margin: 0 0 22px; color: #555; }
+    .card { background: white; border: 1px solid #d9dde2; border-radius: 10px; padding: 20px; margin-bottom: 18px; }
+    .drop { border: 2px dashed #8f9aa6; border-radius: 10px; padding: 34px 18px; text-align: center; cursor: pointer; background: #fbfcfd; }
+    .drop.drag { background: #eef5fb; border-color: #3679a8; }
+    .drop strong { display: block; font-size: 18px; margin-bottom: 6px; }
+    input[type=file] { display: none; }
+    button { border: 0; border-radius: 6px; padding: 10px 16px; font-weight: 700; cursor: pointer; margin-right: 8px; }
+    .primary { background: #246b96; color: white; }
+    .secondary { background: #e9edf1; color: #222; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #status { margin-top: 14px; font-weight: 700; }
+    #detail { margin-top: 6px; color: #666; font-size: 14px; }
+    .warning { background: #fff8df; border: 1px solid #ead58a; padding: 11px 13px; border-radius: 6px; margin: 14px 0 0; font-size: 14px; }
+    .month { margin-top: 26px; }
+    .month h2 { margin-bottom: 8px; }
+    .table-wrap { overflow-x: auto; border: 1px solid #cfd5db; background: white; }
+    table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 13px; }
+    th, td { border: 1px solid #d7dce1; padding: 7px 8px; text-align: center; white-space: nowrap; }
+    th { background: #edf1f4; position: sticky; top: 0; z-index: 2; }
+    th.name, td.name { text-align: left; position: sticky; left: 0; z-index: 1; background: white; min-width: 190px; }
+    th.name { z-index: 3; background: #edf1f4; }
+    td.job { text-align: left; min-width: 155px; }
+    td.has-hours { font-weight: 700; background: #f2f7fa; }
+    .summary { color: #555; margin: 4px 0 10px; font-size: 14px; }
+    .actions { margin-top: 14px; }
+    .home { display: inline-block; margin-top: 14px; color: #246b96; }
+    .hidden { display: none; }
 
+    @media print {
+      body { background: white; }
+      .no-print, .home { display: none !important; }
+      .wrap { max-width: none; padding: 0; }
+      .card { border: 0; padding: 0; }
+      .table-wrap { overflow: visible; border: 0; }
+      table { width: 100%; font-size: 8px; table-layout: fixed; }
+      th, td { padding: 3px 2px; white-space: normal; }
+      th.name, td.name { position: static; min-width: 0; width: 15%; }
+      td.job { min-width: 0; width: 11%; }
+      .month { page-break-before: always; }
+      .month:first-child { page-break-before: auto; }
+      @page { size: landscape; margin: .35in; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="no-print">
+      <h1>PBJ Agency Hours</h1>
+      <p class="sub">
+        Drop Southern Medical Staffing invoice PDFs here.
+        The tool groups the hours by employee and date for PrimeCare PBJ entry.
+      </p>
+    </div>
+
+    <div class="card no-print">
+      <label class="drop" id="dropZone" for="pdfFiles">
+        <strong>Drop agency invoice PDF(s) here</strong>
+        <span>or click to choose files</span>
+      </label>
+
+      <input id="pdfFiles" type="file" accept="application/pdf,.pdf" multiple>
+
+      <div id="status">Waiting for invoice.</div>
+      <div id="detail"></div>
+
+      <div class="warning">
+        These invoices are scanned, so this tool uses OCR.
+        Review the names and hours before entering them into PBJ.
+      </div>
+    </div>
+
+    <div id="results" class="hidden">
+      <div class="card no-print">
+        <strong id="resultSummary"></strong>
+
+        <div class="actions">
+          <button class="primary" id="printBtn" type="button">Print PBJ Entry Sheet</button>
+          <button class="secondary" id="csvBtn" type="button">Save CSV</button>
+          <button class="secondary" id="clearBtn" type="button">Clear</button>
+        </div>
+      </div>
+
+      <div id="tables"></div>
+    </div>
+
+    <a class="home no-print" href="/">← Landmark HR Tools</a>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    const fileInput = document.getElementById("pdfFiles");
+    const dropZone = document.getElementById("dropZone");
+    const statusEl = document.getElementById("status");
+    const detailEl = document.getElementById("detail");
+    const resultsEl = document.getElementById("results");
+    const tablesEl = document.getElementById("tables");
+    const resultSummaryEl = document.getElementById("resultSummary");
+
+    let groupedData = {};
+    let extractedRowCount = 0;
+
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      dropZone.classList.add("drag");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("drag");
+    });
+
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("drag");
+
+      if (e.dataTransfer.files.length) {
+        processFiles([...e.dataTransfer.files]);
+      }
+    });
+
+    fileInput.addEventListener("change", () => {
+      processFiles([...fileInput.files]);
+    });
+
+    document.getElementById("printBtn")
+      .addEventListener("click", () => window.print());
+
+    document.getElementById("clearBtn")
+      .addEventListener("click", clearAll);
+
+    document.getElementById("csvBtn")
+      .addEventListener("click", saveCsv);
+
+    function clearAll() {
+      groupedData = {};
+      extractedRowCount = 0;
+      fileInput.value = "";
+      tablesEl.innerHTML = "";
+      resultsEl.classList.add("hidden");
+      statusEl.textContent = "Waiting for invoice.";
+      detailEl.textContent = "";
+    }
+
+    function cleanDate(text) {
+      let s = text
+        .toUpperCase()
+        .replace(/[OQ]/g, "0")
+        .replace(/[IL|]/g, "1");
+
+      s = s
+        .replace(/[^0-9\/\-.]/g, "")
+        .replace(/[\-.]/g, "/");
+
+      const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+
+      if (!m) return null;
+
+      let year = Number(m[3]);
+      if (year < 100) year += 2000;
+
+      const month = Number(m[1]);
+      const day = Number(m[2]);
+
+      if (
+        month < 1 ||
+        month > 12 ||
+        day < 1 ||
+        day > 31 ||
+        year < 2020 ||
+        year > 2100
+      ) {
+        return null;
+      }
+
+      return { year, month, day };
+    }
+
+    function cleanHours(text) {
+      let s = text
+        .replace(",", ".")
+        .replace(/[^0-9.]/g, "");
+
+      const match = s.match(/^\d{1,2}(?:\.\d{1,2})?$/);
+
+      if (!match) return null;
+
+      const value = Number(match[0]);
+
+      if (
+        !Number.isFinite(value) ||
+        value <= 0 ||
+        value > 24
+      ) {
+        return null;
+      }
+
+      return Math.round(value * 100) / 100;
+    }
+
+    function canonicalTitle(text) {
+      const s = text
+        .toUpperCase()
+        .replace(/[^A-Z]/g, "");
+
+      if (s.includes("LPN")) return "LPN";
+      if (s.includes("CNA")) return "CNA";
+      if (s === "RN" || s.endsWith("RN")) return "RN";
+
+      return null;
+    }
+
+    function jobDescription(title) {
+      if (title === "CNA") return "Certified Nurse Aide";
+      if (title === "LPN") return "Licensed Practical Nurse";
+      if (title === "RN") return "Registered Nurse";
+
+      return title;
+    }
+
+    function cleanName(text) {
+      return text
+        .replace(/[^A-Za-z'\- ]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function nameKey(name) {
+      return name
+        .toUpperCase()
+        .split(/\s+/)
+        .filter(part => part.length > 1)
+        .join(" ")
+        .replace(/[^A-Z]/g, "");
+    }
+
+    function flattenWords(data) {
+      const words = [];
+
+      for (const block of (data.blocks || [])) {
+        for (const para of (block.paragraphs || [])) {
+          for (const line of (para.lines || [])) {
+            for (const word of (line.words || [])) {
+              if (word.text && word.bbox) {
+                words.push(word);
+              }
+            }
+          }
+        }
+      }
+
+      return words;
+    }
+
+    function groupWordsIntoRows(words) {
+      const sorted = [...words].sort((a, b) => {
+        const ay = (a.bbox.y0 + a.bbox.y1) / 2;
+        const by = (b.bbox.y0 + b.bbox.y1) / 2;
+
+        return ay - by || a.bbox.x0 - b.bbox.x0;
+      });
+
+      const rows = [];
+
+      for (const word of sorted) {
+        const y = (word.bbox.y0 + word.bbox.y1) / 2;
+
+        let row = rows.length
+          ? rows[rows.length - 1]
+          : null;
+
+        const height = Math.max(
+          8,
+          word.bbox.y1 - word.bbox.y0
+        );
+
+        const tolerance = Math.max(
+          10,
+          height * 0.7
+        );
+
+        if (
+          !row ||
+          Math.abs(row.y - y) > tolerance
+        ) {
+          row = {
+            y,
+            words: []
+          };
+
+          rows.push(row);
+        }
+
+        row.words.push(word);
+
+        row.y =
+          row.words.reduce(
+            (sum, w) =>
+              sum +
+              (w.bbox.y0 + w.bbox.y1) / 2,
+            0
+          ) / row.words.length;
+      }
+
+      rows.forEach(row =>
+        row.words.sort(
+          (a, b) => a.bbox.x0 - b.bbox.x0
+        )
+      );
+
+      return rows;
+    }
+
+    function parsePage(data, width) {
+      const words = flattenWords(data);
+      const rows = groupWordsIntoRows(words);
+      const found = [];
+
+      for (const row of rows) {
+        const cells = {
+          date: [],
+          name: [],
+          title: [],
+          hours: []
+        };
+
+        for (const word of row.words) {
+          const center =
+            ((word.bbox.x0 + word.bbox.x1) / 2) /
+            width;
+
+          if (center < 0.19) {
+            cells.date.push(word.text);
+          } else if (center < 0.49) {
+            cells.name.push(word.text);
+          } else if (center < 0.61) {
+            cells.title.push(word.text);
+          } else if (center < 0.72) {
+            cells.hours.push(word.text);
+          }
+        }
+
+        const date =
+          cleanDate(cells.date.join(" "));
+
+        const title =
+          canonicalTitle(cells.title.join(" "));
+
+        const hours =
+          cleanHours(cells.hours.join(""));
+
+        const name =
+          cleanName(cells.name.join(" "));
+
+        if (
+          date &&
+          title &&
+          hours !== null &&
+          name.length >= 4
+        ) {
+          found.push({
+            ...date,
+            title,
+            hours,
+            name
+          });
+        }
+      }
+
+      return found;
+    }
+
+    function addRecord(rec) {
+      const monthKey =
+        `${rec.year}-${String(rec.month).padStart(2, "0")}`;
+
+      if (!groupedData[monthKey]) {
+        groupedData[monthKey] = {};
+      }
+
+      const key =
+        `${nameKey(rec.name)}|${rec.title}`;
+
+      if (!groupedData[monthKey][key]) {
+        groupedData[monthKey][key] = {
+          name: rec.name,
+          title: rec.title,
+          days: {}
+        };
+      }
+
+      groupedData[monthKey][key].days[rec.day] =
+        Math.round(
+          (
+            (
+              groupedData[monthKey][key].days[rec.day] ||
+              0
+            ) +
+            rec.hours
+          ) * 100
+        ) / 100;
+
+      extractedRowCount += 1;
+    }
+
+    async function processFiles(files) {
+      const pdfs = files.filter(
+        f =>
+          f.type === "application/pdf" ||
+          f.name.toLowerCase().endsWith(".pdf")
+      );
+
+      if (!pdfs.length) {
+        statusEl.textContent =
+          "Please choose a PDF invoice.";
+        return;
+      }
+
+      groupedData = {};
+      extractedRowCount = 0;
+      tablesEl.innerHTML = "";
+      resultsEl.classList.add("hidden");
+
+      statusEl.textContent =
+        "Starting OCR…";
+
+      detailEl.textContent =
+        "The first run can take a little longer while the OCR engine loads.";
+
+      let worker;
+
+      try {
+        worker =
+          await Tesseract.createWorker(
+            "eng",
+            1,
+            {
+              logger: m => {
+                if (
+                  m.status ===
+                  "recognizing text"
+                ) {
+                  detailEl.textContent =
+                    `Reading page… ${Math.round(
+                      (m.progress || 0) * 100
+                    )}%`;
+                }
+              }
+            }
+          );
+
+        let pageCounter = 0;
+        let totalPages = 0;
+        const docs = [];
+
+        for (const file of pdfs) {
+          const bytes =
+            new Uint8Array(
+              await file.arrayBuffer()
+            );
+
+          const pdf =
+            await pdfjsLib
+              .getDocument({
+                data: bytes
+              })
+              .promise;
+
+          docs.push({
+            file,
+            pdf
+          });
+
+          totalPages += pdf.numPages;
+        }
+
+        for (const item of docs) {
+          for (
+            let p = 1;
+            p <= item.pdf.numPages;
+            p++
+          ) {
+            pageCounter++;
+
+            statusEl.textContent =
+              `Reading ${item.file.name} — page ${p} of ${item.pdf.numPages}`;
+
+            detailEl.textContent =
+              `Overall page ${pageCounter} of ${totalPages}`;
+
+            const page =
+              await item.pdf.getPage(p);
+
+            const viewport =
+              page.getViewport({
+                scale: 2.35
+              });
+
+            const canvas =
+              document.createElement(
+                "canvas"
+              );
+
+            canvas.width =
+              viewport.width;
+
+            canvas.height =
+              viewport.height;
+
+            const context =
+              canvas.getContext(
+                "2d",
+                {
+                  willReadFrequently: true
+                }
+              );
+
+            await page
+              .render({
+                canvasContext: context,
+                viewport
+              })
+              .promise;
+
+            const result =
+              await worker.recognize(
+                canvas
+              );
+
+            const records =
+              parsePage(
+                result.data,
+                canvas.width
+              );
+
+            records.forEach(addRecord);
+          }
+        }
+
+        if (!extractedRowCount) {
+          statusEl.textContent =
+            "I could not read any invoice rows.";
+
+          detailEl.textContent =
+            "Make sure this is a Southern Medical Staffing invoice in the same format as the sample.";
+
+          return;
+        }
+
+        renderTables();
+
+        statusEl.textContent =
+          "Done.";
+
+        detailEl.textContent =
+          `${extractedRowCount} invoice line(s) read.`;
+
+        resultsEl.classList.remove(
+          "hidden"
+        );
+
+      } catch (err) {
+        console.error(err);
+
+        statusEl.textContent =
+          "The invoice could not be read.";
+
+        detailEl.textContent =
+          err && err.message
+            ? err.message
+            : String(err);
+
+      } finally {
+        if (worker) {
+          await worker.terminate();
+        }
+      }
+    }
+
+    function daysInMonth(
+      year,
+      month
+    ) {
+      return new Date(
+        year,
+        month,
+        0
+      ).getDate();
+    }
+
+    function monthLabel(key) {
+      const [year, month] =
+        key.split("-").map(Number);
+
+      return new Date(
+        year,
+        month - 1,
+        1
+      ).toLocaleString(
+        "en-US",
+        {
+          month: "long",
+          year: "numeric"
+        }
+      );
+    }
+
+    function formatHours(value) {
+      if (value === undefined) {
+        return "";
+      }
+
+      return Number(value)
+        .toFixed(2);
+    }
+
+    function renderTables() {
+      tablesEl.innerHTML = "";
+
+      let employeeCount = 0;
+
+      for (
+        const monthKey
+        of Object.keys(groupedData).sort()
+      ) {
+        const [year, month] =
+          monthKey
+            .split("-")
+            .map(Number);
+
+        const records =
+          Object
+            .values(
+              groupedData[monthKey]
+            )
+            .sort(
+              (a, b) =>
+                a.name.localeCompare(
+                  b.name
+                )
+            );
+
+        employeeCount +=
+          records.length;
+
+        const section =
+          document.createElement(
+            "section"
+          );
+
+        section.className =
+          "month";
+
+        const h2 =
+          document.createElement("h2");
+
+        h2.textContent =
+          `${monthLabel(monthKey)} PBJ Agency Hours`;
+
+        section.appendChild(h2);
+
+        const summary =
+          document.createElement("p");
+
+        summary.className =
+          "summary";
+
+        summary.textContent =
+          `${records.length} employee/job record(s) · CMS Pay Type: Contract · CMS Labor Category: Nursing Services`;
+
+        section.appendChild(
+          summary
+        );
+
+        const wrap =
+          document.createElement(
+            "div"
+          );
+
+        wrap.className =
+          "table-wrap";
+
+        const table =
+          document.createElement(
+            "table"
+          );
+
+        const head =
+          document.createElement(
+            "thead"
+          );
+
+        const hr =
+          document.createElement("tr");
+
+        [
+          "Employee Name",
+          "CMS Job Description"
+        ].forEach(
+          (label, idx) => {
+            const th =
+              document.createElement(
+                "th"
+              );
+
+            th.textContent =
+              label;
+
+            if (idx === 0) {
+              th.className =
+                "name";
+            }
+
+            hr.appendChild(th);
+          }
+        );
+
+        for (
+          let d = 1;
+          d <=
+          daysInMonth(
+            year,
+            month
+          );
+          d++
+        ) {
+          const th =
+            document.createElement(
+              "th"
+            );
+
+          th.textContent = d;
+
+          hr.appendChild(th);
+        }
+
+        head.appendChild(hr);
+        table.appendChild(head);
+
+        const body =
+          document.createElement(
+            "tbody"
+          );
+
+        for (const rec of records) {
+          const tr =
+            document.createElement(
+              "tr"
+            );
+
+          const name =
+            document.createElement(
+              "td"
+            );
+
+          name.className =
+            "name";
+
+          name.textContent =
+            rec.name;
+
+          tr.appendChild(name);
+
+          const job =
+            document.createElement(
+              "td"
+            );
+
+          job.className =
+            "job";
+
+          job.textContent =
+            jobDescription(
+              rec.title
+            );
+
+          tr.appendChild(job);
+
+          for (
+            let d = 1;
+            d <=
+            daysInMonth(
+              year,
+              month
+            );
+            d++
+          ) {
+            const td =
+              document.createElement(
+                "td"
+              );
+
+            if (
+              rec.days[d] !==
+              undefined
+            ) {
+              td.textContent =
+                formatHours(
+                  rec.days[d]
+                );
+
+              td.className =
+                "has-hours";
+            }
+
+            tr.appendChild(td);
+          }
+
+          body.appendChild(tr);
+        }
+
+        table.appendChild(body);
+        wrap.appendChild(table);
+        section.appendChild(wrap);
+        tablesEl.appendChild(
+          section
+        );
+      }
+
+      resultSummaryEl.textContent =
+        `${employeeCount} employee/job record(s) prepared from ${extractedRowCount} invoice line(s).`;
+    }
+
+    function csvEscape(value) {
+      const s =
+        String(value ?? "");
+
+      return /[",\n]/.test(s)
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    }
+
+    function saveCsv() {
+      const rows = [[
+        "Month",
+        "Employee Name",
+        "CMS Pay Type",
+        "CMS Labor Category",
+        "CMS Job Description",
+        "Day",
+        "Hours"
+      ]];
+
+      for (
+        const monthKey
+        of Object.keys(groupedData).sort()
+      ) {
+        const records =
+          Object
+            .values(
+              groupedData[monthKey]
+            )
+            .sort(
+              (a, b) =>
+                a.name.localeCompare(
+                  b.name
+                )
+            );
+
+        for (const rec of records) {
+          for (
+            const [day, hours]
+            of Object.entries(
+              rec.days
+            )
+          ) {
+            rows.push([
+              monthKey,
+              rec.name,
+              "Contract",
+              "Nursing Services",
+              jobDescription(
+                rec.title
+              ),
+              day,
+              Number(hours)
+                .toFixed(2)
+            ]);
+          }
+        }
+      }
+
+      const csv =
+        "\ufeff" +
+        rows
+          .map(
+            row =>
+              row
+                .map(csvEscape)
+                .join(",")
+          )
+          .join("\r\n");
+
+      const blob =
+        new Blob(
+          [csv],
+          {
+            type:
+              "text/csv;charset=utf-8"
+          }
+        );
+
+      const url =
+        URL.createObjectURL(
+          blob
+        );
+
+      const a =
+        document.createElement(
+          "a"
+        );
+
+      a.href = url;
+
+      a.download =
+        "PBJ_Agency_Hours.csv";
+
+      document.body
+        .appendChild(a);
+
+      a.click();
+      a.remove();
+
+      URL.revokeObjectURL(
+        url
+      );
+    }
+  </script>
+</body>
+</html>
