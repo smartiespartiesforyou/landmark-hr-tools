@@ -4,6 +4,7 @@ import re
 
 from openpyxl import load_workbook
 
+ATTENDANCE_REVIEW_VERSION = "2026-08-21-CORRECTED-V2"
 MINIMUM_LUNCH_SHIFT_HOURS = 7
 DOUBLE_SHIFT_HOURS = 12
 MINIMUM_INFERRED_LUNCH_MINUTES = 20
@@ -107,7 +108,10 @@ def _format_clock(value):
 
 
 def _is_overnight_cna(location_4, location_5, first_in, final_out):
-    if _clean(location_4).upper() != "NSG" or _clean(location_5).upper() != "CNA":
+    location_4 = _clean(location_4).upper()
+    location_5 = _clean(location_5).upper()
+    is_cna_or_nat = (location_4 == "NSG" and location_5 == "CNA") or location_4 == "NAT"
+    if not is_cna_or_nat:
         return False
     duration = (final_out - first_in).total_seconds() / 3600
     return first_in.hour >= 21 and final_out.hour <= 7 and 6 <= duration <= 10
@@ -201,7 +205,8 @@ def build_daily_review(worked_time_path, lunch_path):
         location_5 = next((r["location_5"] for r in rows if r["location_5"]), "")
         clock_ins = [r["clock_in"] for r in rows if r["clock_in"] is not None]
         clock_outs = [r["clock_out"] for r in rows if r["clock_out"] is not None]
-        if not clock_ins or not clock_outs:
+        has_incomplete_segment = any(r["clock_in"] is None or r["clock_out"] is None for r in rows)
+        if has_incomplete_segment or not clock_ins or not clock_outs:
             results.append({"department": "Incomplete Punches / Still Working", "employee": _display_name(last, first), "date": work_date, "clock_in": "-", "clock_out": "-", "lunch": "Review", "lunch_minutes": "-"})
             continue
 
@@ -212,7 +217,11 @@ def build_daily_review(worked_time_path, lunch_path):
             lunch_entries = _inferred_lunch_entries(rows)
         lunch_minutes = int(round(sum(lunch_entries) * 60))
         expected_breaks = _expected_breaks(rows)
-        nurse_exempt = location_5.upper() in {"LPN", "RGN"} and name_key not in LUNCH_REQUIRED_EMPLOYEES
+        nurse_exempt = (
+            location_5.upper() in {"LPN", "RGN"}
+            and name_key not in LUNCH_REQUIRED_EMPLOYEES
+            and name_key not in ADMIN_EMPLOYEES
+        )
         lunch_exempt = nurse_exempt or _is_overnight_cna(location_4, location_5, first_in, final_out)
         lunch_required = worked_hours >= MINIMUM_LUNCH_SHIFT_HOURS and not lunch_exempt
         if lunch_entries:
