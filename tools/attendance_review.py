@@ -4,7 +4,7 @@ import re
 
 from openpyxl import load_workbook
 
-ATTENDANCE_REVIEW_VERSION = "2026-08-21-STATUS-KEY-V3"
+ATTENDANCE_REVIEW_VERSION = "2026-08-21-DOUBLE-LUNCH-V4"
 MINIMUM_LUNCH_SHIFT_HOURS = 7
 DOUBLE_SHIFT_HOURS = 12
 MINIMUM_INFERRED_LUNCH_MINUTES = 20
@@ -225,7 +225,10 @@ def build_daily_review(worked_time_path, lunch_path):
         lunch_exempt = nurse_exempt or _is_overnight_cna(location_4, location_5, first_in, final_out)
         lunch_required = worked_hours >= MINIMUM_LUNCH_SHIFT_HOURS and not lunch_exempt
         if lunch_entries:
-            lunch_status = "1 of 2" if expected_breaks == 2 and len(lunch_entries) == 1 else "Yes"
+            if expected_breaks == 2 and len(lunch_entries) == 1 and lunch_minutes < 60:
+                lunch_status = "1 of 2"
+            else:
+                lunch_status = "Yes"
         elif worked_hours < MINIMUM_LUNCH_SHIFT_HOURS:
             lunch_status = "Short Shift"
         else:
