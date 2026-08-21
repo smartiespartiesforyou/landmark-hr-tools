@@ -4,7 +4,7 @@ import re
 
 from openpyxl import load_workbook
 
-ATTENDANCE_REVIEW_VERSION = "2026-08-21-DOUBLE-LUNCH-V4"
+ATTENDANCE_REVIEW_VERSION = "2026-08-21-INCOMPLETE-RECORDS-V5"
 MINIMUM_LUNCH_SHIFT_HOURS = 7
 DOUBLE_SHIFT_HOURS = 12
 MINIMUM_INFERRED_LUNCH_MINUTES = 20
@@ -146,6 +146,7 @@ def read_worked_time_report(path):
         "Employee Id": ("Employee Id",), "First Name": ("First Name",), "Last Name": ("Last Name",),
         "Date": ("Date",), "In": ("In Date Time (Raw)",), "Out": ("Out Date Time (Raw)",),
         "Worked": ("Total Work Hours",), "Location 4": ("Location(4)",), "Location 5": ("Location(5)",),
+        "Incomplete Records": ("# Incomplete Records", "Incomplete Records"),
         "Exceptions": ("Exceptions",),
     }, "Calculated Hours By Work Day report")
     grouped = defaultdict(list)
@@ -161,6 +162,7 @@ def read_worked_time_report(path):
             "first": first, "last": last, "clock_in": clock_in, "clock_out": clock_out,
             "worked": _as_number(row[columns["Worked"]]),
             "location_4": _clean(row[columns["Location 4"]]), "location_5": _clean(row[columns["Location 5"]]),
+            "incomplete_records": _as_number(row[columns["Incomplete Records"]]),
             "exceptions": _clean(row[columns["Exceptions"]]),
         })
     if not grouped:
@@ -206,7 +208,8 @@ def build_daily_review(worked_time_path, lunch_path):
         clock_ins = [r["clock_in"] for r in rows if r["clock_in"] is not None]
         clock_outs = [r["clock_out"] for r in rows if r["clock_out"] is not None]
         has_incomplete_segment = any(r["clock_in"] is None or r["clock_out"] is None for r in rows)
-        if has_incomplete_segment or not clock_ins or not clock_outs:
+        has_incomplete_record = any(r["incomplete_records"] > 0 for r in rows)
+        if has_incomplete_record or has_incomplete_segment or not clock_ins or not clock_outs:
             results.append({"department": "Incomplete Punches / Still Working", "employee": _display_name(last, first), "date": work_date, "clock_in": "-", "clock_out": "-", "lunch": "Review", "lunch_minutes": "-"})
             continue
 
