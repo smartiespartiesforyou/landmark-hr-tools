@@ -22,6 +22,24 @@ def create_attendance_pdf(report_date, rows, output_path):
         pdf.setFont("Helvetica-Bold", 12)
         pdf.drawString(36, page_height - 68, f"Department: {department}")
 
+    def status_key():
+        pdf.setStrokeColorRGB(0.72, 0.76, 0.79)
+        pdf.line(36, 45, page_width - 36, 45)
+        pdf.setFillColorRGB(0.2, 0.2, 0.2)
+        pdf.setFont("Helvetica-Bold", 7)
+        pdf.drawString(36, 33, "KEY:")
+        pdf.setFont("Helvetica", 7)
+        pdf.drawString(
+            58,
+            33,
+            "Yes = lunch recorded   No = lunch required, none recorded   N/A = lunch-exempt   Short Shift = under 7 hours   Review = incomplete punch",
+        )
+        pdf.setFillColorRGB(0, 0, 0)
+
+    def finish_page():
+        status_key()
+        pdf.showPage()
+
     def table_header(y):
         pdf.setFillColorRGB(0.12, 0.27, 0.38)
         pdf.rect(36, y - 5, page_width - 72, 22, fill=1, stroke=0)
@@ -34,13 +52,17 @@ def create_attendance_pdf(report_date, rows, output_path):
 
     for department_index, department in enumerate(departments):
         if department_index:
-            pdf.showPage()
+            finish_page()
         page_heading(department)
         if department == review_department:
             pdf.setFont("Helvetica", 10)
             pdf.drawString(42, page_height - 100, "These employees were excluded from the completed attendance list. Review them in UKG.")
             y = page_height - 128
             for row in grouped[department]:
+                if y < 65:
+                    finish_page()
+                    page_heading(department)
+                    y = page_height - 100
                 pdf.drawString(52, y, row["employee"])
                 y -= 18
             continue
@@ -48,7 +70,7 @@ def create_attendance_pdf(report_date, rows, output_path):
         y = table_header(page_height - 100)
         for row_index, row in enumerate(grouped[department]):
             if y < 65:
-                pdf.showPage()
+                finish_page()
                 page_heading(department)
                 y = table_header(page_height - 100)
             if row_index % 2 == 0:
@@ -63,4 +85,5 @@ def create_attendance_pdf(report_date, rows, output_path):
             pdf.drawString(425, y, row["lunch"])
             pdf.drawRightString(548, y, str(row["lunch_minutes"]))
             y -= 20
+    status_key()
     pdf.save()
