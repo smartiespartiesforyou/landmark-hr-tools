@@ -361,7 +361,11 @@ def lunch_review():
         if not pdf or pdf.filename == "":
             return "No file selected"
 
-        temp_folder = tempfile.mkdtemp()
+
+        
+        @app.route("/applicant-tracker")
+        def applicant_tracker():
+                return rentemp_folder = tempfile.mkdtemp()
         temp_pdf = os.path.join(temp_folder, "timesheets.pdf")
         pdf.save(temp_pdf)
 
@@ -388,6 +392,11 @@ def lunch_review():
                     supervisor_path,
                 )
 
+
+
+@app.route("/applicant-tracker")
+def applicant_tracker():
+    return render_template("applicant_tracker.html")
                 return send_file(
                     supervisor_path,
                     as_attachment=True,
