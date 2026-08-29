@@ -92,6 +92,11 @@ def home():
     return render_template("index.html")
 
 
+@app.route("/applicant-tracker")
+def applicant_tracker():
+    return render_template("applicant_tracker.html")
+
+
 def review_timesheets(pdf_path):
     grouped_records = {}
     preview_rows = []
@@ -361,11 +366,7 @@ def lunch_review():
         if not pdf or pdf.filename == "":
             return "No file selected"
 
-
-        
-        @app.route("/applicant-tracker")
-        def applicant_tracker():
-                return rentemp_folder = tempfile.mkdtemp()
+        temp_folder = tempfile.mkdtemp()
         temp_pdf = os.path.join(temp_folder, "timesheets.pdf")
         pdf.save(temp_pdf)
 
@@ -392,11 +393,6 @@ def lunch_review():
                     supervisor_path,
                 )
 
-
-
-@app.route("/applicant-tracker")
-def applicant_tracker():
-    return render_template("applicant_tracker.html")
                 return send_file(
                     supervisor_path,
                     as_attachment=True,
