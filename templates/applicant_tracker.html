@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Applicant Tracker | Landmark HR Tools</title>
+    <style>
+        :root { --navy:#17324d; --blue:#246b9c; --pale:#eef5f9; --line:#c8d4dc; --red:#a52a2a; --green:#26734d; }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:Arial, sans-serif; color:#1f2933; background:#f4f6f8; }
+        header { background:var(--navy); color:white; padding:18px 24px; }
+        header h1 { margin:0 0 5px; font-size:28px; }
+        header a { color:white; }
+        main { max-width:1400px; margin:auto; padding:20px; }
+        .toolbar, .card { background:white; border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+        .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        button, .button { border:0; border-radius:6px; padding:10px 14px; font-weight:bold; cursor:pointer; background:var(--blue); color:white; font-size:15px; }
+        button.secondary { background:#5d6b78; }
+        button.light { background:#e8eef2; color:#1f2933; }
+        button.danger { background:var(--red); }
+        input, select, textarea { width:100%; padding:9px; border:1px solid #9eacb6; border-radius:5px; font-size:15px; background:white; }
+        textarea { min-height:70px; resize:vertical; }
+        label { display:block; font-weight:bold; margin-bottom:5px; }
+        .grid { display:grid; grid-template-columns:repeat(4, minmax(160px, 1fr)); gap:14px; }
+        .span-2 { grid-column:span 2; }
+        .section-title { grid-column:1/-1; margin:12px 0 0; padding-bottom:6px; border-bottom:2px solid var(--pale); color:var(--navy); }
+        .hint { font-size:13px; color:#5c6973; margin-top:4px; }
+        .notice { padding:10px 12px; background:#fff7da; border-left:4px solid #d9a400; margin-bottom:15px; }
+        .status { display:inline-block; padding:5px 9px; border-radius:20px; background:var(--pale); font-weight:bold; white-space:nowrap; }
+        .status.attention { background:#fff0d5; color:#7a4b00; }
+        .status.done { background:#dff3e8; color:#175c39; }
+        .status.closed { background:#eceff1; color:#4b5560; }
+        .filters { display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:10px; align-items:end; }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; background:white; }
+        th { background:var(--navy); color:white; text-align:left; }
+        th, td { padding:11px 9px; border:1px solid var(--line); vertical-align:top; }
+        tr:hover td { background:#f7fafc; }
+        .actions { display:flex; flex-wrap:wrap; gap:6px; }
+        .actions button { padding:7px 9px; font-size:13px; }
+        dialog { width:min(1100px, 96vw); max-height:92vh; border:0; border-radius:10px; padding:0; box-shadow:0 18px 60px #0007; }
+        dialog::backdrop { background:#0008; }
+        .dialog-head { position:sticky; top:0; z-index:2; background:var(--navy); color:white; display:flex; justify-content:space-between; align-items:center; padding:14px 18px; }
+        .dialog-head h2 { margin:0; }
+        .dialog-body { padding:18px; overflow:auto; }
+        .dialog-foot { position:sticky; bottom:0; background:white; border-top:1px solid var(--line); padding:14px 18px; display:flex; justify-content:flex-end; gap:8px; }
+        .email-box { white-space:pre-wrap; background:#f7f9fa; padding:14px; border:1px solid var(--line); border-radius:6px; min-height:180px; }
+        #printArea { display:none; }
+        @media (max-width:850px) { .grid { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } }
+        @media print {
+            body * { visibility:hidden; }
+            #printArea, #printArea * { visibility:visible; }
+            #printArea { display:block; position:absolute; inset:0; padding:0.35in; color:black; }
+            #printArea h1 { font-size:24pt; margin:0 0 8px; }
+            #printArea .print-date { font-size:13pt; margin-bottom:18px; }
+            #printArea table { font-size:15pt; }
+            #printArea th { background:#ddd !important; color:black; }
+            #printArea th, #printArea td { border:2px solid #555; padding:12px; }
+            @page { size:landscape; margin:0.35in; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Applicant Tracker</h1>
+    <div><a href="/">Landmark HR Tools</a> &rsaquo; Private HR working tracker</div>
+</header>
+
+<main>
+    <div class="notice"><strong>Saved on this computer:</strong> Use <strong>Export Backup</strong> regularly. Do not record Social Security numbers, birthdates, or conviction details here.</div>
+
+    <div class="toolbar">
+        <button id="newBtn">+ New Applicant</button>
+        <button class="secondary" id="printBtn">Print Supervisor Update</button>
+        <button class="light" id="exportBtn">Export Backup</button>
+        <label class="button light" style="display:inline-block;margin:0">Import Backup<input id="importFile" type="file" accept="application/json" hidden></label>
+        <span id="saveMessage" class="hint" aria-live="polite"></span>
+    </div>
+
+    <div class="card filters">
+        <div><label for="search">Search</label><input id="search" placeholder="Name, position, shift, email"></div>
+        <div><label for="stageFilter">Stage</label><select id="stageFilter"><option value="">All stages</option></select></div>
+        <div><label for="positionFilter">Position</label><select id="positionFilter"><option value="">All positions</option></select></div>
+        <button class="light" id="clearFilters">Clear</button>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Applicant</th><th>Position / Shift</th><th>Current Stage</th><th>Next Step</th><th>Updated</th><th>Actions</th></tr></thead>
+            <tbody id="applicantRows"></tbody>
+        </table>
+    </div>
+</main>
+
+<dialog id="applicantDialog">
+    <form id="applicantForm">
+        <div class="dialog-head"><h2 id="formTitle">New Applicant</h2><button type="button" class="light" id="closeForm">Close</button></div>
+        <div class="dialog-body grid">
+            <input type="hidden" id="applicantId">
+            <h3 class="section-title">Application</h3>
+            <div><label for="name">Applicant name *</label><input id="name" required></div>
+            <div><label for="phone">Phone number</label><input id="phone" type="tel"></div>
+            <div><label for="email">Email *</label><input id="email" type="email" required></div>
+            <div><label for="position">Position *</label><input id="position" required></div>
+            <div><label for="shift">Shift</label><input id="shift" placeholder="Example: 6–2"></div>
+            <div><label for="idAttached">License / state ID attached</label><select id="idAttached"><option value="">Not checked</option><option>Yes</option><option>No</option></select></div>
+            <div><label for="ssAttached">Social Security card attached</label><select id="ssAttached"><option value="">Not checked</option><option>Yes</option><option>No</option></select></div>
+
+            <h3 class="section-title">Universal and state checks</h3>
+            <div><label for="universalSubmitted">Universal submitted date</label><input id="universalSubmitted" type="date"></div>
+            <div><label for="inviteAccepted">Universal invitation accepted</label><select id="inviteAccepted"><option value="">Pending</option><option>Yes</option><option>No</option></select></div>
+            <div><label for="universalClear">Universal result</label><select id="universalClear"><option value="">Pending</option><option>Clear</option><option>Record Found</option></select></div>
+            <div><label for="stateClear">State result</label><select id="stateClear"><option value="">Pending</option><option>Clear</option><option>Record Found</option></select></div>
+            <div><label for="backgroundReview">Background follow-up</label><select id="backgroundReview"><option value="">None</option><option>Applicant Documentation Needed</option><option>Management Review Required</option><option>Pre-Adverse Action Process</option><option>Cleared After Review</option></select></div>
+
+            <h3 class="section-title">Offer</h3>
+            <div><label for="payRate">Pay rate</label><input id="payRate" inputmode="decimal" placeholder="Example: 17.00"></div>
+            <div><label for="offerSentDate">Offer sent date</label><input id="offerSentDate" type="date"></div>
+            <div><label for="offerReply">Offer reply</label><select id="offerReply"><option value="">Waiting</option><option>Accepted</option><option>Declined</option></select></div>
+            <div><label for="acceptanceDate">Acceptance date</label><input id="acceptanceDate" type="date"></div>
+
+            <h3 class="section-title">Orientation</h3>
+            <div><label for="orientation1">First orientation date</label><input id="orientation1" type="date"></div>
+            <div><label for="orientation1Result">First orientation result</label><select id="orientation1Result"><option value="">Scheduled</option><option>Attended</option><option>No-Show</option></select></div>
+            <div><label for="orientation2">Second orientation date</label><input id="orientation2" type="date"></div>
+            <div><label for="orientation2Result">Second orientation result</label><select id="orientation2Result"><option value="">Scheduled</option><option>Attended</option><option>No-Show</option></select></div>
+
+            <h3 class="section-title">Internal notes</h3>
+            <div class="span-2"><label for="notes">Notes</label><textarea id="notes" placeholder="Do not enter SSNs, birthdates, or conviction details."></textarea></div>
+            <div><label for="manualClose">Close application</label><select id="manualClose"><option value="">Keep open</option><option>Not Selected</option><option>Applicant Withdrew</option><option>Unresponsive</option></select></div>
+        </div>
+        <div class="dialog-foot"><button type="button" class="secondary" id="cancelForm">Cancel</button><button type="submit">Save Applicant</button></div>
+    </form>
+</dialog>
+
+<dialog id="emailDialog">
+    <div class="dialog-head"><h2 id="emailTitle">Applicant Email</h2><button type="button" class="light" id="closeEmail">Close</button></div>
+    <div class="dialog-body">
+        <p><strong>To:</strong> <span id="emailTo"></span></p>
+        <p><strong>Subject:</strong> <span id="emailSubject"></span></p>
+        <div class="email-box" id="emailBody"></div>
+    </div>
+    <div class="dialog-foot"><button class="light" id="copyEmail">Copy Email</button><button id="openEmail">Open in Email</button></div>
+</dialog>
+
+<dialog id="printDialog">
+    <div class="dialog-head"><h2>Supervisor Update</h2><button type="button" class="light" id="closePrint">Close</button></div>
+    <div class="dialog-body grid">
+        <div><label for="printPosition">Position</label><select id="printPosition"><option value="">All positions</option></select></div>
+        <div><label for="printTitle">Page title</label><input id="printTitle" value="Applicant Status Update"></div>
+        <div style="align-self:end"><button id="runPrint" type="button">Print Large-Text Update</button></div>
+    </div>
+</dialog>
+
+<div id="printArea"></div>
+
+<script>
+const STORAGE_KEY = 'landmarkApplicantTrackerV1';
+const fields = ['name','phone','email','position','shift','idAttached','ssAttached','universalSubmitted','inviteAccepted','universalClear','stateClear','backgroundReview','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
+let applicants = loadApplicants();
+let emailDraft = null;
+
+const $ = id => document.getElementById(id);
+const todayText = () => new Date().toLocaleDateString();
+const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const fmtDate = value => value ? new Date(value + 'T12:00:00').toLocaleDateString() : '';
+
+function loadApplicants() {
+    try { const value = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(value) ? value : []; }
+    catch { return []; }
+}
+
+function saveApplicants() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
+    $('saveMessage').textContent = 'Saved on this computer at ' + new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    render();
+}
+
+function statusFor(a) {
+    if (a.orientation1Result === 'Attended' || a.orientation2Result === 'Attended') return ['Hired', 'Completed', 'done'];
+    if (a.orientation1Result === 'No-Show' && a.orientation2Result === 'No-Show') return ['Closed—Two Orientation No-Shows', 'Application closed', 'closed'];
+    if (a.manualClose) return ['Closed—' + a.manualClose, 'Application closed', 'closed'];
+    if (a.orientation1Result === 'No-Show' && !a.orientation2) return ['Needs New Orientation Date', 'Schedule second and final orientation', 'attention'];
+    if (a.orientation2) return ['Second Orientation Scheduled', 'Attend orientation on ' + fmtDate(a.orientation2), 'attention'];
+    if (a.orientation1) return ['Orientation Scheduled', 'Attend orientation on ' + fmtDate(a.orientation1), ''];
+    if (a.offerReply === 'Declined') return ['Offer Declined', 'Close application', 'closed'];
+    if (a.offerReply === 'Accepted') return ['Offer Accepted', 'Schedule orientation', 'done'];
+    if (a.offerSentDate) return ['Offer Sent—Waiting for Reply', 'Applicant must accept by email', 'attention'];
+    if (a.universalClear === 'Clear' && a.stateClear === 'Clear') return ['Ready for Offer', 'Enter pay and orientation date; send offer', 'done'];
+    if (a.backgroundReview === 'Applicant Documentation Needed') return ['Applicant Documentation Needed', 'Applicant must send conviction information', 'attention'];
+    if (a.backgroundReview === 'Management Review Required') return ['Management Review Required', 'Send to management for decision', 'attention'];
+    if (a.backgroundReview === 'Pre-Adverse Action Process') return ['Pre-Adverse Action Process', 'Follow company/FCRA process', 'attention'];
+    if (a.universalClear === 'Record Found' || a.stateClear === 'Record Found') return ['Background Review Needed', 'Select the correct follow-up', 'attention'];
+    if (a.inviteAccepted === 'Yes') return ['Background Checks in Progress', 'Allow up to 10 days for both results', ''];
+    if (a.universalSubmitted) return ['Waiting for Applicant', 'Complete Universal invitation', 'attention'];
+    if (a.idAttached === 'No' || a.ssAttached === 'No') return ['More Information Needed', 'Obtain missing ID/card copy', 'attention'];
+    return ['Application Received', 'Submit in Universal', ''];
+}
+
+function render() {
+    const q = $('search').value.trim().toLowerCase();
+    const stage = $('stageFilter').value;
+    const position = $('positionFilter').value;
+    const visible = applicants.filter(a => {
+        const s = statusFor(a)[0];
+        const haystack = [a.name,a.position,a.shift,a.email].join(' ').toLowerCase();
+        return (!q || haystack.includes(q)) && (!stage || s === stage) && (!position || a.position === position);
+    }).sort((a,b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+
+    $('applicantRows').innerHTML = visible.length ? visible.map(a => {
+        const [status,next,klass] = statusFor(a);
+        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
+    }).join('') : '<tr><td colspan="6">No applicants match this view.</td></tr>';
+    refreshOptions();
+}
+
+function refreshOptions() {
+    const selectedStage = $('stageFilter').value, selectedPosition = $('positionFilter').value, selectedPrint = $('printPosition').value;
+    const stages = [...new Set(applicants.map(a => statusFor(a)[0]))].sort();
+    const positions = [...new Set(applicants.map(a => a.position).filter(Boolean))].sort();
+    $('stageFilter').innerHTML = '<option value="">All stages</option>' + stages.map(x => `<option>${esc(x)}</option>`).join('');
+    $('positionFilter').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
+    $('printPosition').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
+    $('stageFilter').value = selectedStage; $('positionFilter').value = selectedPosition; $('printPosition').value = selectedPrint;
+}
+
+function openNew() {
+    $('applicantForm').reset(); $('applicantId').value = ''; $('formTitle').textContent = 'New Applicant'; $('applicantDialog').showModal();
+}
+
+window.editApplicant = id => {
+    const a = applicants.find(x => x.id === id); if (!a) return;
+    $('applicantId').value = a.id; fields.forEach(f => $(f).value = a[f] || '');
+    $('formTitle').textContent = 'Update ' + a.name; $('applicantDialog').showModal();
+};
+
+window.deleteApplicant = id => {
+    const a = applicants.find(x => x.id === id); if (!a || !confirm('Delete ' + a.name + '? This cannot be undone unless you have a backup.')) return;
+    applicants = applicants.filter(x => x.id !== id); saveApplicants();
+};
+
+function emailTypes(a) {
+    const first = (a.name || 'Applicant').trim().split(/\s+/)[0];
+    return [
+        {label:'Application Received / Universal Invitation', subject:'Your Application with Landmark South', body:`Hello ${first},\n\nWe have received your application and entered your information into our background-screening system. Please watch your email for a background-screening invitation from Universal Background Screening. Complete the invitation as soon as possible. Please also check your spam or junk folder if you do not see it.\n\nThank you,\nLandmark South Nursing and Rehabilitation Center`},
+        {label:'Reminder to Complete Universal', subject:'Action Required: Universal Background Screening', body:`Hello ${first},\n\nYour Universal Background Screening invitation was sent to your email address. Please check your inbox, spam, and junk folders and complete the invitation as soon as possible. Your application cannot move forward until it is completed.\n\nThank you,\nLandmark South Nursing and Rehabilitation Center`},
+        {label:'Background Checks Underway', subject:'Background Checks Underway', body:`Hello ${first},\n\nThank you for completing your Universal Background Screening invitation. Your background checks are now underway. Please allow up to 10 days for us to receive both your Universal and state background-check results. We will contact you when the next step is ready.\n\nThank you,\nLandmark South Nursing and Rehabilitation Center`}
+    ];
+}
+
+window.showEmailMenu = id => {
+    const a = applicants.find(x => x.id === id); if (!a) return;
+    const options = emailTypes(a);
+    const choice = prompt('Choose email:\n1. ' + options[0].label + '\n2. ' + options[1].label + '\n3. ' + options[2].label + '\n\nEnter 1, 2, or 3:');
+    const selected = options[Number(choice)-1]; if (!selected) return;
+    emailDraft = {...selected, to:a.email}; $('emailTitle').textContent = selected.label; $('emailTo').textContent = a.email; $('emailSubject').textContent = selected.subject; $('emailBody').textContent = selected.body; $('emailDialog').showModal();
+};
+
+$('applicantForm').addEventListener('submit', e => {
+    e.preventDefault(); const id = $('applicantId').value; const old = applicants.find(a => a.id === id);
+    const record = {id: id || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())), createdAt: old?.createdAt || new Date().toISOString()};
+    fields.forEach(f => record[f] = $(f).value.trim()); record.updatedAt = new Date().toISOString();
+    if (old) applicants = applicants.map(a => a.id === id ? record : a); else applicants.push(record);
+    saveApplicants(); $('applicantDialog').close();
+});
+
+$('newBtn').onclick = openNew; $('closeForm').onclick = $('cancelForm').onclick = () => $('applicantDialog').close();
+$('closeEmail').onclick = () => $('emailDialog').close();
+$('closePrint').onclick = () => $('printDialog').close();
+$('printBtn').onclick = () => $('printDialog').showModal();
+['search','stageFilter','positionFilter'].forEach(id => $(id).addEventListener(id === 'search' ? 'input' : 'change', render));
+$('clearFilters').onclick = () => { $('search').value=''; $('stageFilter').value=''; $('positionFilter').value=''; render(); };
+
+$('copyEmail').onclick = async () => { if (!emailDraft) return; await navigator.clipboard.writeText(`To: ${emailDraft.to}\nSubject: ${emailDraft.subject}\n\n${emailDraft.body}`); $('copyEmail').textContent='Copied'; setTimeout(()=>$('copyEmail').textContent='Copy Email',1500); };
+$('openEmail').onclick = () => { if (!emailDraft) return; location.href = `mailto:${encodeURIComponent(emailDraft.to)}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`; };
+
+$('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify({version:1, exportedAt:new Date().toISOString(), applicants}, null, 2)], {type:'application/json'});
+    const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`Applicant_Tracker_Backup_${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(link.href);
+};
+
+$('importFile').onchange = async e => {
+    const file=e.target.files[0]; if(!file) return;
+    try { const data=JSON.parse(await file.text()); const incoming=Array.isArray(data)?data:data.applicants; if(!Array.isArray(incoming)) throw Error(); if(!confirm(`Replace the current tracker with ${incoming.length} applicant(s) from this backup?`)) return; applicants=incoming; saveApplicants(); }
+    catch { alert('That is not a valid Applicant Tracker backup.'); }
+    finally { e.target.value=''; }
+};
+
+$('runPrint').onclick = () => {
+    const position=$('printPosition').value; const rows=applicants.filter(a => !position || a.position===position).filter(a => !statusFor(a)[0].startsWith('Closed') && statusFor(a)[0] !== 'Hired');
+    $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Update')}</h1><div class="print-date">Printed ${todayText()}${position ? ' — ' + esc(position) : ''}</div><table><thead><tr><th>Applicant</th><th>Position / Shift</th><th>Current Stage</th><th>Next Step</th></tr></thead><tbody>${rows.length ? rows.map(a=>{const [s,n]=statusFor(a);return `<tr><td>${esc(a.name)}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(s)}</td><td>${esc(n)}</td></tr>`}).join('') : '<tr><td colspan="4">No active applicants.</td></tr>'}</tbody></table>`;
+    $('printDialog').close(); window.print();
+};
+
+render();
+</script>
+</body>
+</html>
