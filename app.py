@@ -34,6 +34,10 @@ from tools.evaluation_finder import (
     evaluations_for_month,
     read_evaluation_employees,
 )
+from tools.birthday_anniversary import (
+    create_birthday_anniversary_pdf,
+    read_birthdays_and_anniversaries,
+)
 
 
 app = Flask(__name__)
@@ -762,6 +766,65 @@ def evaluations():
 @app.route("/anniversaries")
 def anniversaries():
     return evaluations()
+
+
+@app.route("/birthdays-anniversaries", methods=["GET", "POST"])
+def birthdays_anniversaries():
+    if request.method == "GET":
+        return render_template(
+            "birthdays_anniversaries.html",
+            default_month=datetime.now().strftime("%Y-%m"),
+        )
+
+    ukg_file = request.files.get("ukg_file")
+    scope = request.form.get("scope", "month")
+    report_month = request.form.get("report_month", "")
+    if not ukg_file:
+        return "<h2>Error</h2><p>The UKG report is required.</p>", 400
+    if scope not in {"month", "year"}:
+        return "<h2>Error</h2><p>Select the list needed.</p>", 400
+    if scope == "month" and not report_month:
+        return "<h2>Error</h2><p>Select a month.</p>", 400
+
+    try:
+        temp_folder = tempfile.mkdtemp()
+        input_path = os.path.join(temp_folder, "ukg_birthdays_anniversaries.xlsx")
+        ukg_file.save(input_path)
+        employees, missing_birthdays = read_birthdays_and_anniversaries(input_path)
+        if missing_birthdays:
+            names = "".join(f"<li>{name}</li>" for name in missing_birthdays)
+            return f"""
+                <h2>Missing birthday information</h2>
+                <p>The report stopped because these active employees have no birthday:</p>
+                <ul>{names}</ul>
+                <p>Correct the birthday information in UKG and run the report again.</p>
+                <p><a href='/birthdays-anniversaries'>Try again</a></p>
+            """, 400
+        if not employees:
+            raise ValueError("No active employees with birthday and anniversary dates were found.")
+
+        month = None
+        if scope == "month":
+            selected = datetime.strptime(report_month, "%Y-%m")
+            month = selected.month
+            output_name = f"Birthdays_Anniversaries_{selected.strftime('%B')}.pdf"
+        else:
+            output_name = "Birthday_Anniversary_Company_List.pdf"
+
+        output_path = os.path.join(temp_folder, output_name)
+        create_birthday_anniversary_pdf(employees, output_path, month=month)
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name=output_name,
+            mimetype="application/pdf",
+        )
+    except Exception as error:
+        return f"""
+            <h2>Could not create the birthday and anniversary list</h2>
+            <p>{error}</p>
+            <p><a href='/birthdays-anniversaries'>Try again</a></p>
+        """, 400
 
 
 if __name__ == "__main__":
