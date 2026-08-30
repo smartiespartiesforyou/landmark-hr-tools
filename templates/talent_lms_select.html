@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Choose In-Service</title>
+    <style>
+        body { font-family:Arial,sans-serif; max-width:900px; margin:35px auto; padding:0 20px; color:#222; }
+        .card { border:1px solid #ccc; border-radius:8px; padding:24px; margin:18px 0; }
+        .summary { background:#eef5fa; border-left:5px solid #1f4e78; padding:14px 18px; line-height:1.6; }
+        label.main { display:block; font-weight:bold; margin-top:22px; }
+        select, input[type="text"] { margin-top:7px; padding:9px; width:100%; box-sizing:border-box; }
+        .choice label { display:block; margin:10px 0; }
+        .options { display:none; margin:10px 0 0 24px; columns:2; }
+        .options label { display:block; break-inside:avoid; padding:4px 0; }
+        .note { color:#555; font-size:14px; line-height:1.5; }
+        .warning { color:#7a4b00; font-weight:bold; }
+        button { margin-top:24px; padding:11px 18px; font-weight:bold; cursor:pointer; }
+        a { color:#174f79; }
+    </style>
+</head>
+<body>
+    <h1>Choose the In-Service</h1>
+    <div class="summary">
+        <b>UKG current employees:</b> {{ employee_count }}<br>
+        <b>Training Matrix users:</b> {{ matrix_user_count }}<br>
+        <b>Unique name matches:</b> {{ unique_count }}<br>
+        <span class="warning"><b>Needs HR name review:</b> {{ duplicate_count + missing_count }}</span>
+    </div>
+    <form method="POST" class="card">
+        <input type="hidden" name="action" value="generate">
+        <input type="hidden" name="token" value="{{ token }}">
+
+        <label class="main" for="course_index">In-Service Course</label>
+        <select id="course_index" name="course_index" required>
+            <option value="">Select one course</option>
+            {% for course in courses %}<option value="{{ course.index }}">{{ course.name }}</option>{% endfor %}
+        </select>
+        <p class="note">Monthly in-services before the current year are hidden. They are not required retroactively.</p>
+
+        <label class="main" for="report_title">Complete title for the printout (optional)</label>
+        <input id="report_title" type="text" name="report_title" placeholder="Use this when TalentLMS shortened the course name with ...">
+
+        <label class="main">Who is required?</label>
+        <div class="choice">
+            <label><input type="radio" name="scope" value="all" checked> All current employees</label>
+            <label><input type="radio" name="scope" value="departments"> Only selected UKG departments</label>
+            <label><input type="radio" name="scope" value="jobs"> Only selected UKG job titles</label>
+        </div>
+
+        <div class="options" id="department_options">
+            {% for department in departments %}<label><input type="checkbox" name="departments" value="{{ department }}"> {{ department or 'No department' }}</label>{% endfor %}
+        </div>
+        <div class="options" id="job_options">
+            {% for job in jobs %}<label><input type="checkbox" name="jobs" value="{{ job }}"> {{ job }}</label>{% endfor %}
+        </div>
+
+        <button type="submit">Create Department Printouts</button>
+    </form>
+    <p><a href="/talent-lms">Upload different files</a></p>
+    <script>
+        const departments = document.getElementById("department_options");
+        const jobs = document.getElementById("job_options");
+        function updateScope() {
+            const scope = document.querySelector('input[name="scope"]:checked').value;
+            departments.style.display = scope === "departments" ? "block" : "none";
+            jobs.style.display = scope === "jobs" ? "block" : "none";
+        }
+        document.querySelectorAll('input[name="scope"]').forEach(input => input.addEventListener("change", updateScope));
+        updateScope();
+    </script>
+</body>
+</html>
