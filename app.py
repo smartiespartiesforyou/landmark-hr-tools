@@ -29,6 +29,11 @@ from tools.talent_lms import (
     read_training_matrix,
     read_ukg_employees,
 )
+from tools.evaluation_finder import (
+    create_evaluation_pdf,
+    evaluations_for_month,
+    read_evaluation_employees,
+)
 
 
 app = Flask(__name__)
@@ -710,14 +715,53 @@ def ad347():
     return "<h2>Coming Soon</h2>"
 
 
-@app.route("/evaluations")
+@app.route("/evaluations", methods=["GET", "POST"])
 def evaluations():
-    return "<h2>Coming Soon</h2>"
+    if request.method == "GET":
+        return render_template(
+            "evaluations.html",
+            default_month=datetime.now().strftime("%Y-%m"),
+        )
+
+    ukg_file = request.files.get("ukg_file")
+    report_month = request.form.get("report_month", "")
+    if not ukg_file or not report_month:
+        return "<h2>Error</h2><p>The UKG report and evaluation month are required.</p>", 400
+
+    try:
+        selected_month = datetime.strptime(report_month, "%Y-%m")
+        temp_folder = tempfile.mkdtemp()
+        input_path = os.path.join(temp_folder, "ukg_evaluations.xlsx")
+        ukg_file.save(input_path)
+        employees = read_evaluation_employees(input_path)
+        rows = evaluations_for_month(employees, selected_month.year, selected_month.month)
+        if not rows:
+            return f"""
+                <h2>No evaluations due</h2>
+                <p>No 90-day or annual evaluations were found for {selected_month.strftime('%B %Y')}.</p>
+                <p><a href='/evaluations'>Choose another month</a></p>
+            """
+
+        output_name = f"Department_Evaluations_{report_month}.pdf"
+        output_path = os.path.join(temp_folder, output_name)
+        create_evaluation_pdf(rows, selected_month.year, selected_month.month, output_path)
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name=output_name,
+            mimetype="application/pdf",
+        )
+    except Exception as error:
+        return f"""
+            <h2>Could not create the evaluation packet</h2>
+            <p>{error}</p>
+            <p><a href='/evaluations'>Try again</a></p>
+        """, 400
 
 
 @app.route("/anniversaries")
 def anniversaries():
-    return "<h2>Coming Soon</h2>"
+    return evaluations()
 
 
 if __name__ == "__main__":
