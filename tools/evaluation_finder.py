@@ -76,12 +76,12 @@ def read_evaluation_employees(path):
         last_col = _column(columns, {"lastname"}, "Last Name")
         department_col = _column(
             columns,
-            {"dept", "department", "departmentname", "homedepartment"},
+            {"dept", "department", "departmentname", "homedepartment", "location4"},
             "Department (DEPT)",
         )
         job_col = _column(
             columns,
-            {"job", "primaryjob", "jobtitle", "position", "positiontitle"},
+            {"job", "primaryjob", "jobtitle", "position", "positiontitle", "location5"},
             "Primary Job/Position (JOB)",
         )
         latest_col = _column(columns, {"latestdate", "latesthireorrehiredate"}, "Latest Date", required=False)
@@ -237,4 +237,3 @@ def create_evaluation_pdf(rows, year, month, output_path):
         ))
 
     document.build(story)
-
