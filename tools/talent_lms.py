@@ -1,31 +1,20 @@
-import csv
 import re
+import unicodedata
 from calendar import monthrange
+from collections import defaultdict
 from datetime import date, datetime
-from difflib import SequenceMatcher
 
 from openpyxl import load_workbook
 
 
-UKG_REQUIRED = {
-    "Employee Id",
-    "Last Name",
-    "First Name",
-    "Employee Status",
-    "Date Hired",
-    "Date Re-Hired",
-    "DEPT",
-}
-
-TALENT_REQUIRED = {
-    "User",
-    "Progress status",
-    "Completion date",
-}
+UKG_REQUIRED = {"Employee Id", "Last Name", "First Name", "Employee Status", "Date Hired", "Date Re-Hired", "DEPT"}
+TERMINATED_STATUSES = {"terminated", "deceased", "resigned", "retired"}
+COMPLETED_MARKS = {"✔", "✓"}
 
 
 def normalize_name(value):
-    value = str(value or "").casefold().strip()
+    value = unicodedata.normalize("NFKD", str(value or ""))
+    value = value.encode("ascii", "ignore").decode("ascii").casefold().strip()
     value = re.sub(r"[^a-z0-9]+", " ", value)
     return " ".join(value.split())
 
@@ -37,7 +26,6 @@ def _as_date(value):
         return value
     if value in (None, ""):
         return None
-
     text = str(value).strip()
     for fmt in ("%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d"):
         try:
@@ -55,141 +43,109 @@ def _find_header_row(rows):
     raise ValueError("Could not find the employee header row in the UKG file.")
 
 
-def read_ukg_employees(path, year, month):
+def read_ukg_employees(path):
     workbook = load_workbook(path, read_only=True, data_only=True)
     sheet = workbook.active
     rows = list(sheet.iter_rows(values_only=True))
-
     header_row = _find_header_row(rows)
     headers = [str(value).strip() if value is not None else "" for value in rows[header_row]]
     missing = UKG_REQUIRED.difference(headers)
     if missing:
+        workbook.close()
         raise ValueError("UKG file is missing: " + ", ".join(sorted(missing)))
 
     column = {name: index for index, name in enumerate(headers)}
-    month_end = date(year, month, monthrange(year, month)[1])
     employees = []
-
     for row in rows[header_row + 1:]:
         employee_id = row[column["Employee Id"]]
         if employee_id in (None, ""):
             continue
-
         status = str(row[column["Employee Status"]] or "").strip()
-        if status.casefold() in {"terminated", "deceased", "resigned", "retired"}:
+        if status.casefold() in TERMINATED_STATUSES:
             continue
-
-        hired = _as_date(row[column["Date Hired"]])
-        rehired = _as_date(row[column["Date Re-Hired"]])
-        effective_hire = rehired or hired
-
-        if not effective_hire or effective_hire > month_end:
-            continue
-
         first = str(row[column["First Name"]] or "").strip()
         last = str(row[column["Last Name"]] or "").strip()
-        department = str(row[column["DEPT"]] or "").strip()
-        job = ""
-        if "JOB" in column:
-            job = str(row[column["JOB"]] or "").strip()
-
         employees.append({
             "employee_id": str(employee_id).strip(),
             "first": first,
             "last": last,
             "display_name": f"{first} {last}".strip().title(),
-            "talent_key": normalize_name(f"{last} {first}"),
-            "department": department,
-            "job": job,
-            "effective_hire": effective_hire,
+            "name_keys": {normalize_name(f"{first} {last}"), normalize_name(f"{last} {first}")},
+            "department": str(row[column["DEPT"]] or "").strip(),
+            "job": str(row[column["JOB"]] or "").strip() if "JOB" in column else "",
+            "effective_hire": _as_date(row[column["Date Re-Hired"]]) or _as_date(row[column["Date Hired"]]),
         })
-
     workbook.close()
     return employees
 
 
-def read_talent_lms(path):
-    with open(path, newline="", encoding="utf-8-sig") as file:
-        reader = csv.DictReader(file)
-        headers = set(reader.fieldnames or [])
-        missing = TALENT_REQUIRED.difference(headers)
-        if missing:
-            raise ValueError("TalentLMS file is missing: " + ", ".join(sorted(missing)))
-
-        records = []
-        for row in reader:
-            user = str(row.get("User") or "").strip()
-            if not user:
-                continue
-            records.append({
-                "user": user,
-                "key": normalize_name(user),
-                "status": str(row.get("Progress status") or "").strip(),
-                "completion_date": _as_date(row.get("Completion date")),
-            })
-    return records
-
-
-def _name_parts(key):
-    parts = key.split()
-    if not parts:
-        return "", ""
-    return parts[0], " ".join(parts[1:])
-
-
-def find_possible_name_mismatches(employees, talent_records):
-    talent_by_key = {row["key"]: row for row in talent_records}
-    unmatched_talent = [row for row in talent_records if row["key"] not in {e["talent_key"] for e in employees}]
-    possible = []
-
-    for employee in employees:
-        if employee["talent_key"] in talent_by_key:
+def read_training_matrix(path):
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    if "Training matrix" not in workbook.sheetnames:
+        workbook.close()
+        raise ValueError("TalentLMS file is missing the Training matrix sheet.")
+    sheet = workbook["Training matrix"]
+    rows = sheet.iter_rows(values_only=True)
+    headers = next(rows, None)
+    if not headers or str(headers[0] or "").strip() != "User":
+        workbook.close()
+        raise ValueError("TalentLMS Training Matrix must begin with a User column.")
+    courses = [
+        {"index": index, "name": str(value).strip()}
+        for index, value in enumerate(headers[1:], start=1)
+        if value not in (None, "")
+    ]
+    matrix_rows = []
+    for row in rows:
+        if not row or row[0] in (None, ""):
             continue
-
-        ukg_last, ukg_first = _name_parts(employee["talent_key"])
-        best = None
-        best_score = 0.0
-
-        for talent in unmatched_talent:
-            talent_last, talent_first = _name_parts(talent["key"])
-            if ukg_last != talent_last or not ukg_first or not talent_first:
-                continue
-
-            score = SequenceMatcher(None, ukg_first, talent_first).ratio()
-            prefix_match = ukg_first.startswith(talent_first) or talent_first.startswith(ukg_first)
-            if (score >= 0.72 or prefix_match) and score > best_score:
-                best = talent
-                best_score = score
-
-        if best:
-            possible.append({
-                "ukg_name": employee["display_name"],
-                "talent_name": best["user"],
-                "talent_status": best["status"],
-            })
-
-    return possible
+        matrix_rows.append({"user": str(row[0]).strip(), "key": normalize_name(row[0]), "values": tuple(row)})
+    workbook.close()
+    return courses, matrix_rows
 
 
-def build_incomplete_list(employees, talent_records):
-    talent_by_key = {}
-    for record in talent_records:
-        talent_by_key.setdefault(record["key"], []).append(record)
-
-    incomplete = []
-    completed = 0
-
+def match_employees(employees, matrix_rows):
+    rows_by_key = defaultdict(list)
+    for row in matrix_rows:
+        rows_by_key[row["key"]].append(row)
+    unique, duplicates, missing = [], [], []
     for employee in employees:
-        records = talent_by_key.get(employee["talent_key"], [])
-        did_complete = any(
-            record["status"].casefold() == "completed" or record["completion_date"]
-            for record in records
-        )
-
-        if did_complete:
-            completed += 1
+        hits_by_identity = {}
+        for key in employee["name_keys"]:
+            for row in rows_by_key.get(key, []):
+                hits_by_identity[id(row)] = row
+        hits = list(hits_by_identity.values())
+        if len(hits) == 1:
+            unique.append((employee, hits[0]))
+        elif len(hits) > 1:
+            duplicates.append({"employee": employee, "matrix_names": [row["user"] for row in hits]})
         else:
-            incomplete.append(employee)
+            missing.append(employee)
+    return unique, duplicates, missing
 
-    incomplete.sort(key=lambda item: (item["department"], item["last"], item["first"]))
-    return incomplete, completed
+
+def course_month_end(course_name):
+    match = re.match(r"^\s*(0?[1-9]|1[0-2])\s+[A-Za-z]+\b.*\b(20\d{2})\s*$", str(course_name or ""))
+    if not match:
+        return None
+    month, year = int(match.group(1)), int(match.group(2))
+    return date(year, month, monthrange(year, month)[1])
+
+
+def is_completed(matrix_row, course_index):
+    values = matrix_row["values"]
+    return course_index < len(values) and str(values[course_index] or "").strip() in COMPLETED_MARKS
+
+
+def filter_eligible(employees, scope, departments, jobs, eligibility_end=None):
+    selected = []
+    department_set, job_set = set(departments or []), set(jobs or [])
+    for employee in employees:
+        if scope == "departments" and employee["department"] not in department_set:
+            continue
+        if scope == "jobs" and employee["job"] not in job_set:
+            continue
+        if eligibility_end and employee["effective_hire"] and employee["effective_hire"] > eligibility_end:
+            continue
+        selected.append(employee)
+    return selected
