@@ -5,7 +5,9 @@ from reportlab.lib.colors import HexColor
 
 import csv
 import os
+import secrets
 import tempfile
+import time
 import zipfile
 from datetime import datetime
 
@@ -20,9 +22,11 @@ from tools.attendance_pdf import create_attendance_pdf
 from tools.ad347_data import build_ad347_record
 from tools.pdf_generator import create_ad347_pdf
 from tools.talent_lms import (
-    build_incomplete_list,
-    find_possible_name_mismatches,
-    read_talent_lms,
+    course_month_end,
+    filter_eligible,
+    is_completed,
+    match_employees,
+    read_training_matrix,
     read_ukg_employees,
 )
 
@@ -30,6 +34,8 @@ from tools.talent_lms import (
 app = Flask(__name__)
 
 TEMPLATE_PATH = "BLANK_AD347.pdf"
+TALENT_UPLOADS = {}
+TALENT_UPLOAD_TTL_SECONDS = 60 * 60
 
 
 @app.route("/attendance-review", methods=["GET", "POST"])
@@ -471,7 +477,12 @@ def _talent_department(employee):
     return employee["department"] or "No Department"
 
 
-def create_talent_lms_docx(incomplete, month_label, eligible_count, completed_count, output_path):
+def _safe_filename(value):
+    safe = "".join(character if character.isalnum() else "_" for character in value)
+    return safe.strip("_")[:80] or "InService"
+
+
+def create_talent_lms_docx(follow_up, report_label, department, eligible_count, completed_count, output_path):
     document = Document()
     section = document.sections[0]
     section.top_margin = Inches(0.75)
@@ -487,7 +498,7 @@ def create_talent_lms_docx(incomplete, month_label, eligible_count, completed_co
 
     title = document.add_paragraph()
     title.paragraph_format.space_after = Pt(4)
-    title_run = title.add_run(f"{month_label} In-Service - Not Completed")
+    title_run = title.add_run(f"{report_label} - Follow-Up")
     title_run.bold = True
     title_run.font.name = "Calibri"
     title_run.font.size = Pt(18)
@@ -496,53 +507,78 @@ def create_talent_lms_docx(incomplete, month_label, eligible_count, completed_co
     summary = document.add_paragraph()
     summary.paragraph_format.space_after = Pt(12)
     summary_run = summary.add_run(
-        f"Eligible: {eligible_count}    Completed: {completed_count}    Not completed: {len(incomplete)}"
+        f"Department: {department}    Eligible: {eligible_count}    "
+        f"Completed: {completed_count}    Follow-up: {len(follow_up)}"
     )
     summary_run.bold = True
 
-    note = document.add_paragraph(
-        "Editable follow-up list. Delete any employee who should not be included before printing."
-    )
+    note = document.add_paragraph("Give this document only to the manager responsible for this group.")
     note.paragraph_format.space_after = Pt(14)
 
-    if not incomplete:
-        document.add_paragraph("Everyone required for this month has a completed record.")
+    if not follow_up:
+        document.add_paragraph("Everyone in this group has a completed record.")
     else:
-        sorted_employees = sorted(
-            incomplete,
-            key=lambda employee: (
-                _talent_department(employee),
-                employee["last"],
-                employee["first"],
-            ),
-        )
-        current_department = None
-        for employee in sorted_employees:
-            department = _talent_department(employee)
-            if department != current_department:
-                heading = document.add_paragraph()
-                heading.paragraph_format.keep_with_next = True
-                heading.paragraph_format.space_before = Pt(10)
-                heading.paragraph_format.space_after = Pt(4)
-                heading_run = heading.add_run(department)
-                heading_run.bold = True
-                heading_run.font.name = "Calibri"
-                heading_run.font.size = Pt(13)
-                heading_run.font.color.rgb = RGBColor(31, 78, 120)
-                current_department = department
-
+        for item in sorted(follow_up, key=lambda row: (row["employee"]["last"], row["employee"]["first"])):
+            employee = item["employee"]
             paragraph = document.add_paragraph()
             paragraph.paragraph_format.left_indent = Inches(0.15)
             paragraph.paragraph_format.space_after = Pt(3)
             paragraph.add_run(employee["display_name"])
+            if item.get("note"):
+                note_run = paragraph.add_run(f" — {item['note']}")
+                note_run.italic = True
+                note_run.font.color.rgb = RGBColor(128, 74, 0)
 
     footer = section.footer.paragraphs[0]
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    footer_run = footer.add_run("For supervisor follow-up. UKG employment dates determine monthly eligibility.")
+    footer_run = footer.add_run("For supervisor follow-up. UKG determines active employee eligibility.")
     footer_run.font.name = "Calibri"
     footer_run.font.size = Pt(8)
 
     document.save(output_path)
+
+
+def create_talent_name_review_docx(missing, duplicates, report_label, output_path):
+    document = Document()
+    title = document.add_paragraph()
+    run = title.add_run(f"{report_label} - HR Name Review")
+    run.bold = True
+    run.font.size = Pt(18)
+    run.font.color.rgb = RGBColor(31, 78, 120)
+    document.add_paragraph(
+        "These employees could not be matched safely. Correct names or enrollment in TalentLMS, "
+        "export a new Training Matrix, and rerun the tool."
+    )
+    if missing:
+        heading = document.add_paragraph()
+        heading.add_run("Not found in Training Matrix").bold = True
+        for employee in sorted(missing, key=lambda row: (row["department"], row["last"], row["first"])):
+            document.add_paragraph(
+                f"{employee['display_name']} — {_talent_department(employee)} — {employee['job'] or 'No job listed'}",
+                style="List Bullet",
+            )
+    if duplicates:
+        heading = document.add_paragraph()
+        heading.add_run("Duplicate exact names in Training Matrix").bold = True
+        for item in sorted(duplicates, key=lambda row: row["employee"]["display_name"]):
+            employee = item["employee"]
+            document.add_paragraph(
+                f"{employee['display_name']} — {_talent_department(employee)} — "
+                f"{len(item['matrix_names'])} TalentLMS rows",
+                style="List Bullet",
+            )
+    if not missing and not duplicates:
+        document.add_paragraph("No name-review problems were found.")
+    document.save(output_path)
+
+
+def _talent_upload_directory(token):
+    if not token or not token.isalnum() or len(token) != 32:
+        raise ValueError("The uploaded-file session is invalid. Upload both reports again.")
+    directory = os.path.join(tempfile.gettempdir(), "landmark_talent_uploads", token)
+    if not os.path.isdir(directory):
+        raise ValueError("The uploaded reports expired. Upload both reports again.")
+    return directory
 
 
 @app.route("/talent-lms", methods=["GET", "POST"])
@@ -550,77 +586,123 @@ def talent_lms():
     if request.method == "GET":
         return render_template("talent_lms.html")
 
-    uploaded_files = request.files.getlist("report_files")
-    month_value = request.form.get("month", "")
-
-    ukg_file = next(
-        (file for file in uploaded_files if file.filename.lower().endswith(".xlsx")),
-        None,
-    )
-    talent_file = next(
-        (file for file in uploaded_files if file.filename.lower().endswith(".csv")),
-        None,
-    )
-    if not ukg_file or not talent_file:
-        return "<h2>Error</h2><p>Drop one UKG Excel file and one TalentLMS CSV file into the box.</p><p><a href='/talent-lms'>Try again</a></p>", 400
-
+    action = request.form.get("action", "upload")
     try:
-        year_text, month_text = month_value.split("-", 1)
-        year = int(year_text)
-        month = int(month_text)
-        month_date = datetime(year, month, 1)
-    except (ValueError, AttributeError):
-        return "<h2>Error</h2><p>Select the in-service month.</p><p><a href='/talent-lms'>Try again</a></p>", 400
+        if action == "upload":
+            uploaded_files = [file for file in request.files.getlist("report_files") if file.filename]
+            if len(uploaded_files) != 2 or any(not file.filename.lower().endswith(".xlsx") for file in uploaded_files):
+                raise ValueError("Upload exactly two Excel files: the UKG Employee Information report and TalentLMS Training Matrix.")
+            token = secrets.token_hex(16)
+            upload_directory = os.path.join(tempfile.gettempdir(), "landmark_talent_uploads", token)
+            os.makedirs(upload_directory, exist_ok=False)
+            paths = []
+            for index, uploaded_file in enumerate(uploaded_files):
+                path = os.path.join(upload_directory, f"report_{index}.xlsx")
+                uploaded_file.save(path)
+                paths.append(path)
 
-    temp_folder = tempfile.mkdtemp()
-    ukg_path = os.path.join(temp_folder, "employees.xlsx")
-    talent_path = os.path.join(temp_folder, "talent.csv")
-    ukg_file.save(ukg_path)
-    talent_file.save(talent_path)
+            ukg_path = matrix_path = None
+            employees = courses = matrix_rows = None
+            for path in paths:
+                try:
+                    candidate_courses, candidate_rows = read_training_matrix(path)
+                    matrix_path, courses, matrix_rows = path, candidate_courses, candidate_rows
+                    continue
+                except Exception:
+                    pass
+                try:
+                    candidate_employees = read_ukg_employees(path)
+                    ukg_path, employees = path, candidate_employees
+                except Exception:
+                    pass
+            if not ukg_path or not matrix_path:
+                raise ValueError("The tool could not identify one UKG Employee Information file and one TalentLMS Training Matrix file.")
 
-    try:
-        employees = read_ukg_employees(ukg_path, year, month)
-        talent_records = read_talent_lms(talent_path)
-        mismatches = find_possible_name_mismatches(employees, talent_records)
-        incomplete, completed_count = build_incomplete_list(employees, talent_records)
-        month_label = month_date.strftime("%B %Y")
-
-        if mismatches:
-            rows = "".join(
-                f"<tr><td>{item['ukg_name']}</td><td>{item['talent_name']}</td><td>{item['talent_status']}</td></tr>"
-                for item in mismatches
+            os.replace(ukg_path, os.path.join(upload_directory, "ukg.xlsx"))
+            os.replace(matrix_path, os.path.join(upload_directory, "matrix.xlsx"))
+            unique, duplicates, missing = match_employees(employees, matrix_rows)
+            current_year = datetime.now().year
+            visible_courses = []
+            for course in courses:
+                month_end = course_month_end(course["name"])
+                if month_end and month_end.year < current_year:
+                    continue
+                visible_courses.append(course)
+            return render_template(
+                "talent_lms_select.html",
+                token=token,
+                courses=visible_courses,
+                departments=sorted({employee["department"] for employee in employees}),
+                jobs=sorted({employee["job"] for employee in employees if employee["job"]}),
+                employee_count=len(employees),
+                matrix_user_count=len(matrix_rows),
+                unique_count=len(unique),
+                duplicate_count=len(duplicates),
+                missing_count=len(missing),
             )
-            return f"""
-            <h2>{month_label} — Name Review</h2>
-            <div style="background:#fff3cd;padding:14px;max-width:760px">
-                <b>Possible name mismatch found.</b> Correct it in TalentLMS if these are the same person,
-                export the course report again, and create the list again.
-            </div>
-            <table border="1" cellpadding="8" cellspacing="0" style="margin-top:18px;border-collapse:collapse">
-                <tr><th>UKG Name</th><th>TalentLMS Name</th><th>TalentLMS Status</th></tr>
-                {rows}
-            </table>
-            <p><a href="/talent-lms">Try again</a> | <a href="/">Home</a></p>
-            """
 
-        docx_path = os.path.join(temp_folder, "TalentLMS_Not_Completed.docx")
-        create_talent_lms_docx(
-            incomplete,
-            month_label,
-            len(employees),
-            completed_count,
-            docx_path,
+        upload_directory = _talent_upload_directory(request.form.get("token", ""))
+        employees = read_ukg_employees(os.path.join(upload_directory, "ukg.xlsx"))
+        courses, matrix_rows = read_training_matrix(os.path.join(upload_directory, "matrix.xlsx"))
+        course_index = int(request.form.get("course_index", "-1"))
+        course = next((item for item in courses if item["index"] == course_index), None)
+        if not course:
+            raise ValueError("Select an in-service course.")
+        scope = request.form.get("scope", "all")
+        if scope not in {"all", "departments", "jobs"}:
+            raise ValueError("Select who is required to complete this in-service.")
+        eligibility_end = course_month_end(course["name"])
+        eligible = filter_eligible(
+            employees,
+            scope,
+            request.form.getlist("departments"),
+            request.form.getlist("jobs"),
+            eligibility_end,
         )
-        safe_month = month_date.strftime("%Y-%m")
-        return send_file(
-            docx_path,
-            as_attachment=True,
-            download_name=f"TalentLMS_{safe_month}_Not_Completed.docx",
-            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
+        if not eligible:
+            raise ValueError("No UKG employees matched the selected requirement group.")
 
+        unique, duplicates, missing = match_employees(eligible, matrix_rows)
+        completed_ids = set()
+        follow_up = []
+        for employee, matrix_row in unique:
+            if is_completed(matrix_row, course_index):
+                completed_ids.add(employee["employee_id"])
+            else:
+                follow_up.append({"employee": employee, "note": ""})
+        for employee in missing:
+            follow_up.append({"employee": employee, "note": "Not found in TalentLMS — HR review"})
+        for item in duplicates:
+            follow_up.append({"employee": item["employee"], "note": "Duplicate TalentLMS name — HR review"})
+
+        report_label = request.form.get("report_title", "").strip() or course["name"]
+        safe_label = _safe_filename(report_label)
+        result_directory = tempfile.mkdtemp()
+        zip_path = os.path.join(result_directory, f"TalentLMS_{safe_label}_Department_Lists.zip")
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            departments = sorted({_talent_department(employee) for employee in eligible})
+            for department in departments:
+                department_employees = [employee for employee in eligible if _talent_department(employee) == department]
+                employee_ids = {employee["employee_id"] for employee in department_employees}
+                department_follow_up = [item for item in follow_up if item["employee"]["employee_id"] in employee_ids]
+                docx_name = f"{_safe_filename(department)}_{safe_label}_Follow_Up.docx"
+                docx_path = os.path.join(result_directory, docx_name)
+                create_talent_lms_docx(
+                    department_follow_up,
+                    report_label,
+                    department,
+                    len(department_employees),
+                    len(employee_ids.intersection(completed_ids)),
+                    docx_path,
+                )
+                archive.write(docx_path, arcname=docx_name)
+            review_path = os.path.join(result_directory, "HR_Name_Review.docx")
+            create_talent_name_review_docx(missing, duplicates, report_label, review_path)
+            archive.write(review_path, arcname="HR_Name_Review.docx")
+
+        return send_file(zip_path, as_attachment=True, download_name=os.path.basename(zip_path), mimetype="application/zip")
     except Exception as error:
-        return f"<h2>Error</h2><pre>{error}</pre><p><a href='/talent-lms'>Try again</a></p>", 400
+        return f"<h2>Error</h2><p>{error}</p><p><a href='/talent-lms'>Start over</a></p>", 400
 
 
 @app.route("/ad347")
