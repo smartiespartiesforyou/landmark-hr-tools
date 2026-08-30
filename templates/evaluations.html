@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Evaluation Finder</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; color: #222; }
+        .card { border: 1px solid #ccc; border-radius: 8px; padding: 24px; margin: 20px 0; }
+        label { display: block; font-weight: bold; margin-top: 18px; }
+        input { display: block; margin-top: 7px; }
+        input[type="month"] { padding: 7px; }
+        button { display: block; margin-top: 24px; padding: 11px 18px; font-weight: bold; cursor: pointer; }
+        .note { margin-top: 20px; background: #f5f5f5; padding: 14px; line-height: 1.5; }
+        a { color: #174f79; }
+    </style>
+</head>
+<body>
+    <h1>Evaluation Finder</h1>
+    <p>Create department printouts for 90-day and annual evaluations.</p>
+
+    <div class="card">
+        <form method="POST" enctype="multipart/form-data">
+            <label for="ukg_file">UKG Employee Information: Latest Date – Hire or Rehire</label>
+            <input id="ukg_file" name="ukg_file" type="file" accept=".xlsx" required>
+
+            <label for="report_month">Evaluation month</label>
+            <input id="report_month" name="report_month" type="month" value="{{ default_month }}" required>
+
+            <button type="submit">Download Department Evaluation Packet</button>
+        </form>
+
+        <div class="note">
+            The UKG report must include <b>Latest Date</b>, <b>DEPT/Department</b>, and <b>JOB/Primary Job</b>.
+            The PDF begins each department on a separate page and includes Hire/Rehire Date, evaluation type,
+            due date, and a Returned checkbox.
+        </div>
+    </div>
+
+    <p><a href="/">Home</a></p>
+</body>
+</html>
