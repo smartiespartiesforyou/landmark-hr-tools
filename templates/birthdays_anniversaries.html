@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Birthdays &amp; Anniversaries</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; color: #222; }
+        .card { border: 1px solid #ccc; border-radius: 8px; padding: 24px; margin: 20px 0; }
+        label, legend { display: block; font-weight: bold; margin-top: 18px; }
+        input { margin-top: 7px; }
+        input[type="file"], input[type="month"] { display: block; }
+        input[type="month"] { padding: 7px; }
+        fieldset { border: 0; padding: 0; margin: 0; }
+        .choice { font-weight: normal; margin-top: 9px; }
+        button { display: block; margin-top: 24px; padding: 11px 18px; font-weight: bold; cursor: pointer; }
+        .note { margin-top: 20px; background: #f5f5f5; padding: 14px; line-height: 1.5; }
+        a { color: #174f79; }
+    </style>
+</head>
+<body>
+    <h1>Birthdays &amp; Anniversaries</h1>
+    <p>Create a monthly bulletin-board sheet or the full-year company list.</p>
+
+    <div class="card">
+        <form method="POST" enctype="multipart/form-data">
+            <label for="ukg_file">UKG Employee Information: Copy of Latest Date - Hire or Rehire</label>
+            <input id="ukg_file" name="ukg_file" type="file" accept=".xlsx" required>
+
+            <fieldset>
+                <legend>List needed</legend>
+                <label class="choice"><input type="radio" name="scope" value="month" checked> Monthly bulletin-board sheet</label>
+                <label class="choice"><input type="radio" name="scope" value="year"> Full-year company list</label>
+            </fieldset>
+
+            <label for="report_month">Month</label>
+            <input id="report_month" name="report_month" type="month" value="{{ default_month }}">
+
+            <button type="submit">Download Birthday &amp; Anniversary List</button>
+        </form>
+
+        <div class="note">
+            Required columns: <b>First Name</b>, <b>Last Name</b>, <b>Latest Date</b>, and <b>Date Birthday</b>.
+            The output shows month and day only. Birth years and employee ages are never printed.
+        </div>
+    </div>
+
+    <p><a href="/">Home</a></p>
+    <script>
+        const scopeButtons = document.querySelectorAll('input[name="scope"]');
+        const monthInput = document.getElementById("report_month");
+        function updateMonth() {
+            const fullYear = document.querySelector('input[name="scope"]:checked').value === "year";
+            monthInput.disabled = fullYear;
+        }
+        scopeButtons.forEach(button => button.addEventListener("change", updateMonth));
+        updateMonth();
+    </script>
+</body>
+</html>
