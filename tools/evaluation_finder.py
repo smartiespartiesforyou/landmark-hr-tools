@@ -20,6 +20,9 @@ from reportlab.platypus import (
 
 TERMINATED_STATUSES = {"terminated", "deceased", "resigned", "retired", "inactive"}
 
+# Department codes whose evaluations should be combined into James's packet.
+JAMES_DEPARTMENT_CODES = {"ADM", "SSV", "ACT", "MTN", "MRD", "NCL", "ASL", "ADL", "ADR", "ASR", "DON"}
+
 
 def _clean_header(value):
     return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
@@ -119,6 +122,8 @@ def read_evaluation_employees(path):
                 department = "CNAs"
             elif department_code == "NSG":
                 department = "Nursing"
+            elif department_code in JAMES_DEPARTMENT_CODES:
+                department = "James"
 
             employees.append({
                 "name": f"{first.title()} {last.title()}".strip(),
