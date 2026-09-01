@@ -110,6 +110,16 @@ def read_evaluation_employees(path):
                 continue
             department = str(row[department_col] or "").strip() or "Department Not Listed"
             job = str(row[job_col] or "").strip() or "Not Listed"
+
+            # Keep CNAs on their own evaluation printout instead of combining
+            # them with nurses under the NSG department.
+            department_code = department.upper()
+            job_code = job.upper()
+            if department_code == "NSG" and job_code == "CNA":
+                department = "CNAs"
+            elif department_code == "NSG":
+                department = "Nursing"
+
             employees.append({
                 "name": f"{first.title()} {last.title()}".strip(),
                 "department": department,
@@ -231,8 +241,7 @@ def create_evaluation_pdf(rows, year, month, output_path):
         story.append(table)
         story.append(Spacer(1, 12))
         story.append(Paragraph(
-            f"Total evaluations due: <b>{len(department_rows)}</b> &nbsp;&nbsp;&nbsp; "
-            "Manager signature: ______________________________ &nbsp;&nbsp; Date: ____________",
+            f"Total evaluations due: <b>{len(department_rows)}</b>",
             styles["Normal"],
         ))
 
