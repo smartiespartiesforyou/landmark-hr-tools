@@ -142,6 +142,7 @@
     <div class="dialog-body">
         <p><strong>To:</strong> <span id="emailTo"></span></p>
         <p><strong>Subject:</strong> <span id="emailSubject"></span></p>
+        <div id="emailAttachments" class="notice" style="display:none"></div>
         <div class="email-box" id="emailBody"></div>
     </div>
     <div class="dialog-foot"><button class="light" id="copyEmail">Copy Email</button><button class="secondary" id="markEmailSent">Mark as Sent</button><button id="openEmail">Open in Email</button></div>
@@ -168,6 +169,21 @@ const $ = id => document.getElementById(id);
 const todayText = () => new Date().toLocaleDateString();
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtDate = value => value ? new Date(value + 'T12:00:00').toLocaleDateString() : '';
+function businessDaysElapsed(startValue, endValue = new Date()) {
+    if (!startValue) return 0;
+    const start = new Date(startValue + 'T12:00:00');
+    const end = new Date(endValue);
+    end.setHours(12,0,0,0);
+    let count = 0;
+    const cursor = new Date(start);
+    cursor.setDate(cursor.getDate() + 1);
+    while (cursor <= end) {
+        const day = cursor.getDay();
+        if (day !== 0 && day !== 6) count++;
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    return count;
+}
 
 function loadApplicants() {
     try { const value = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(value) ? value : []; }
@@ -264,14 +280,91 @@ function emailTypes(a) {
     const orientationDate = a.orientation1 ? new Date(a.orientation1 + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'}) : '[ENTER ORIENTATION DATE]';
     const differentialText = clinicalDifferential ? ' If you are hired for a CNA or nursing position, shift differentials may apply based on your assigned shift, eligibility, and company policy. Additional information will be provided during orientation.' : '';
     const offerBody = `READING THIS EMAIL IN ITS ENTIRETY IS REQUIRED. If you do not have all required documentation and necessary apps completed before orientation, your orientation will be rescheduled.\n\n${a.name},\n\nWe are pleased to offer you employment with Landmark South Nursing & Rehabilitation as a ${a.position}.\n\nYour base hourly rate will be ${pay} per hour. Pay rates are set according to the company’s established pay scale and are non-negotiable.${differentialText}\n\nYour orientation is scheduled as follows:\n\nDate: ${orientationDate}\nTime: 10:00 a.m.\nLocation:\nLandmark South Nursing & Rehabilitation\n18180 Jefferson Hwy\nBaton Rouge, LA 70817\n\nOrientation is paid and will be considered your official start date. Late arrivals will not be permitted and orientation will be rescheduled. Please arrive promptly and dressed in scrubs or business attire.\n\nYou must remain on-site until all required orientation videos have been completed, which may take six (6) or more hours. Orientation is scheduled until 4:30 p.m. If you are unable to stay for the entire orientation, please do not schedule at this time.\n\nIf all required videos are not completed during orientation, you will be required to return the following morning at 8:30 a.m. to finish the remaining assignments.\n\nYou will also be required to complete a drug screening.\n\nYour immediate supervisor will be ${supervisor}.\n\nREQUIRED BEFORE ORIENTATION\n\nPlease download these free apps before arriving:\n- TalentLMS\n- UKG Ready\n- Payactiv\n\nPlease bring a laptop, tablet, or smartphone capable of streaming videos, along with appropriate chargers and headphones.\n\nI-9 DOCUMENTATION\n\nYou must bring original, unexpired documentation establishing your identity and authorization to work in the United States. You may bring either:\n\n- One List A document, such as a U.S. passport, Permanent Resident Card, or Employment Authorization Document; OR\n- One List B document, such as a driver’s license or state-issued ID, AND one List C document, such as an unrestricted Social Security card or an original or certified birth certificate.\n\nThe employer cannot choose which acceptable documents you present. The complete list is available at: https://www.uscis.gov/i-9-central/form-i-9-acceptable-documents\n\nDIRECT DEPOSIT\n\nYou must provide information from your bank showing that you are the account holder: bank name, your name, routing number, and account number. You may provide a voided check or a screenshot from your bank account app. This information must be emailed to apriest@asimgt.com.\n\nARRIVAL INSTRUCTIONS\n\n- Bring a pen.\n- The orientation classroom is cold. Bring a sweater or jacket.\n- Sign in at the front kiosk located in the waiting room.\n- You do not need to check in with the receptionist.\n- After signing in, remain in the waiting room until a staff member comes for you.\n- Do not go to the classroom or other areas of the facility on your own.\n- Children are not permitted to attend orientation.\n\nIf you do not reply to this email confirming your attendance, we will consider the position declined and remove you from the orientation schedule. Confirmation must be provided by email only.\n\nWe look forward to welcoming you to Landmark South.`;
-    return [
-        {id:'application_received', label:'Application Received / Universal Invitation', subject:'Application Received: Action Required', body:`Hello ${first},\n\nDue to the high volume of applications we receive, all communication regarding your application, including questions, requests, and status updates, must be conducted by email.\n\nWe have received your application and entered it into our system. You should receive an invitation from Universal Background Screening within 24 hours. Please complete it as soon as possible. If you do not see it within that time, check your spam or junk folder.\n\nThank you,\nLandmark South Nursing and Rehabilitation Center`},
-        {id:'universal_reminder', label:'Final Reminder to Complete Universal', subject:'Final Notice: Universal Background Screening Invitation', body:`Hello ${first},\n\nYour Universal Background Screening invitation was sent to your email address. Please check your inbox, spam, and junk folders and complete the invitation as soon as possible.\n\nIt is your responsibility to complete all required steps if you wish to continue with the application process. No additional reminders will be sent regarding this invitation. If the invitation is not completed within 72 hours from the date of this email, your application will be closed.\n\nThank you,\nLandmark South Nursing and Rehabilitation Center`},
-        {id:'background_underway', label:'Background Checks Underway', subject:'Background Checks Underway', body:`Hello ${first},\n\nThank you for completing your Universal Background Screening invitation. Your Universal and state background checks are now underway. Please allow up to 10 days for us to receive both results.\n\nIt is important that you check your email every day during the next 10 days. Background-check results may be received sooner, and you may receive time-sensitive instructions or requests for additional information. Failure to respond may delay or close your application.\n\nWe will contact you by email when the next step is ready.\n\nThank you,\nLandmark South Nursing and Rehabilitation Center`},
+    const options = [
+        {id:'application_received', label:'Application Received / Universal Invitation', subject:'Application Received: Action Required', body:`Hello ${first},
+
+Due to the high volume of applications we receive, all communication regarding your application, including questions, requests, and status updates, must be conducted by email.
+
+We have received your application and entered it into our system. You should receive an invitation from Universal Background Screening within 24 hours. Please complete it as soon as possible. If you do not see it within that time, check your spam or junk folder.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`},
+        {id:'universal_reminder', label:'Final Reminder to Complete Universal', subject:'Final Notice: Universal Background Screening Invitation', body:`Hello ${first},
+
+Your Universal Background Screening invitation was sent to your email address. Please check your inbox, spam, and junk folders and complete the invitation as soon as possible.
+
+It is your responsibility to complete all required steps if you wish to continue with the application process. No additional reminders will be sent regarding this invitation. If the invitation is not completed within 72 hours from the date of this email, your application will be closed.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`},
+        {id:'background_underway', label:'Background Checks Underway', subject:'Background Checks Underway', body:`Hello ${first},
+
+Thank you for completing your Universal Background Screening invitation. Your Universal and state background checks are now underway. Please allow up to 10 days for us to receive both results.
+
+It is important that you check your email every day during the next 10 days. Background-check results may be received sooner, and you may receive time-sensitive instructions or requests for additional information. Failure to respond may delay or close your application.
+
+We will contact you by email when the next step is ready.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`},
         {id:'employment_offer', label:'Employment Offer / Orientation', subject:'Employment Offer and Orientation Information', body:offerBody},
-        {id:'background_information', label:'Request Background Information', subject:'Action Required: Additional Background Information', body:`Hello ${first},\n\nYour background check requires additional information before your application can be considered further. It is your responsibility to provide official documentation pertaining to the reported record, such as the final court disposition or other relevant court documents.\n\nPlease reply to this email with the requested documentation within 72 hours. Do not send your Social Security number or birthdate by email. If the information is not received within 72 hours, your application may be closed.\n\nProviding information does not guarantee employment. The information will be reviewed as part of the hiring process.\n\nThank you,\nLandmark South Nursing and Rehabilitation Center`},
-        {id:'not_selected', label:'Not Selected (Background Not a Factor)', subject:'Application Status Update', body:`Hello ${first},\n\nThank you for your interest in employment with Landmark South Nursing and Rehabilitation Center. We have decided to move forward with another applicant for this position.\n\nWe appreciate the time you invested in the application process and wish you the best in your job search.\n\nThank you,\nLandmark South Nursing and Rehabilitation Center`}
+        {id:'background_information', label:'Request Background Information', subject:'Action Required: Additional Background Information', body:`Hello ${first},
+
+Your background check requires additional information before your application can be considered further. It is your responsibility to provide official documentation pertaining to the reported record, such as the final court disposition or other relevant court documents.
+
+Please reply to this email with the requested documentation within 72 hours. Do not send your Social Security number or birthdate by email. If the information is not received within 72 hours, your application may be closed.
+
+Providing information does not guarantee employment. The information will be reviewed as part of the hiring process.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`},
+        {id:'not_selected', label:'Not Selected (Background Not a Factor)', subject:'Application Status Update', body:`Hello ${first},
+
+Thank you for your interest in employment with Landmark South Nursing and Rehabilitation Center. We have decided to move forward with another applicant for this position.
+
+We appreciate the time you invested in the application process and wish you the best in your job search.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`}
     ];
+
+    const backgroundIssue = a.universalClear === 'Record Found' || a.stateClear === 'Record Found' || ['Management Review Required','Pre-Adverse Action Process'].includes(a.backgroundReview) || a.preAdverseSentDate;
+    if (backgroundIssue) {
+        options.push({
+            id:'pre_adverse',
+            label:'AD-303 Pre-Adverse Action Email',
+            subject:'Important Notice Regarding Your Background Check',
+            attachments:'BEFORE SENDING: Have the Administrator complete AD-303. Attach the completed AD-303, the consumer report being relied upon, and the FCRA Summary of Rights.',
+            body:`Hello ${first},
+
+Please review the attached Pre-Adverse Action Letter (AD-303), along with the attached copy of the consumer report and Summary of Your Rights Under the Fair Credit Reporting Act.
+
+The information in the consumer report may adversely affect your application for employment. No final adverse employment decision has been made at this time.
+
+Please review the materials carefully and notify us promptly if you believe any information in the consumer report is incorrect or if you have information you would like considered.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`
+        });
+    }
+
+    if (a.managementDecision === 'Do Not Hire' || a.finalAdverseSentDate) {
+        options.push({
+            id:'final_adverse',
+            label:'AD-304 Final Adverse Action Email',
+            subject:'Final Notice Regarding Your Application',
+            attachments:'BEFORE SENDING: Attach the completed AD-304 Adverse Action Letter. The tracker will prevent this email from opening until 5 business days have elapsed after the recorded AD-303 date.',
+            body:`Hello ${first},
+
+Please review the attached Adverse Action Letter (AD-304) regarding the final decision on your application for employment.
+
+The attached letter contains important information about the consumer report used in the decision and your rights regarding that report.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`
+        });
+    }
+    return options;
 }
 
 window.showEmailMenu = id => {
@@ -290,10 +383,37 @@ window.showEmailMenu = id => {
         alert('Enter the pay rate and first orientation date before creating the offer email.');
         return;
     }
+    if (selected.id === 'pre_adverse' && !['Record Found'].includes(a.universalClear) && !['Record Found'].includes(a.stateClear) && !['Management Review Required','Pre-Adverse Action Process'].includes(a.backgroundReview)) {
+        alert('Record the background issue or management review status before creating the AD-303 email.');
+        return;
+    }
+    if (selected.id === 'final_adverse') {
+        if (a.managementDecision !== 'Do Not Hire') {
+            alert('Management decision must be recorded as Do Not Hire before creating the AD-304 email.');
+            return;
+        }
+        if (!a.preAdverseSentDate) {
+            alert('Record the AD-303 pre-adverse sent date before creating the AD-304 email.');
+            return;
+        }
+        const elapsed = businessDaysElapsed(a.preAdverseSentDate);
+        if (elapsed < 5) {
+            alert(`STOP: Only ${elapsed} business day${elapsed === 1 ? '' : 's'} have elapsed since AD-303. Company policy considers 5 business days a reasonable amount of time before final adverse action.`);
+            return;
+        }
+    }
     emailDraft = {...selected, to:a.email, applicantId:a.id};
     $('emailTitle').textContent = selected.label;
     $('emailTo').textContent = a.email;
     $('emailSubject').textContent = selected.subject;
+    const attachmentBox = $('emailAttachments');
+    if (selected.attachments) {
+        attachmentBox.textContent = selected.attachments;
+        attachmentBox.style.display = 'block';
+    } else {
+        attachmentBox.textContent = '';
+        attachmentBox.style.display = 'none';
+    }
     $('emailBody').textContent = selected.body;
     $('markEmailSent').textContent = log[selected.id] ? 'Mark Resent' : 'Mark as Sent';
     $('emailDialog').showModal();
@@ -337,6 +457,13 @@ $('markEmailSent').onclick = () => {
     a.emailLog[emailDraft.id] = new Date().toISOString();
     if (emailDraft.id === 'employment_offer' && !a.offerSentDate) a.offerSentDate = new Date().toISOString().slice(0,10);
     if (emailDraft.id === 'background_information') a.backgroundReview = 'Applicant Documentation Needed';
+    if (emailDraft.id === 'pre_adverse') {
+        a.backgroundReview = 'Pre-Adverse Action Process';
+        if (!a.preAdverseSentDate) a.preAdverseSentDate = new Date().toISOString().slice(0,10);
+    }
+    if (emailDraft.id === 'final_adverse') {
+        if (!a.finalAdverseSentDate) a.finalAdverseSentDate = new Date().toISOString().slice(0,10);
+    }
     if (emailDraft.id === 'not_selected') a.manualClose = 'Not Selected';
     a.updatedAt = new Date().toISOString();
     saveApplicants();
