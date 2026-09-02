@@ -10,6 +10,12 @@ from openpyxl import load_workbook
 UKG_REQUIRED = {"Employee Id", "Last Name", "First Name", "Employee Status", "Date Hired", "Date Re-Hired", "DEPT"}
 TERMINATED_STATUSES = {"terminated", "deceased", "resigned", "retired"}
 COMPLETED_MARKS = {"✔", "✓"}
+KNOWN_DUPLICATE_NAMES = {
+    "bridget horn",
+    "tequira millican",
+    "tia octave",
+    "tina holmes",
+}
 
 
 def normalize_name(value):
@@ -118,6 +124,14 @@ def match_employees(employees, matrix_rows):
         if len(hits) == 1:
             unique.append((employee, hits[0]))
         elif len(hits) > 1:
+            # TalentLMS will not remove four known duplicate accounts. HR marks the
+            # correct account by capitalizing the entire TalentLMS user name.
+            employee_key = normalize_name(f"{employee['first']} {employee['last']}")
+            if employee_key in KNOWN_DUPLICATE_NAMES:
+                capitalized_hits = [row for row in hits if row["user"].isupper()]
+                if len(capitalized_hits) == 1:
+                    unique.append((employee, capitalized_hits[0]))
+                    continue
             duplicates.append({"employee": employee, "matrix_names": [row["user"] for row in hits]})
         else:
             missing.append(employee)
@@ -139,11 +153,19 @@ def is_completed(matrix_row, course_index):
 
 def filter_eligible(employees, scope, departments, jobs, eligibility_end=None):
     selected = []
-    department_set, job_set = set(departments or []), set(jobs or [])
+    department_set = {str(value).strip().upper() for value in (departments or [])}
+    job_set = {str(value).strip().upper() for value in (jobs or [])}
     for employee in employees:
-        if scope == "departments" and employee["department"] not in department_set:
-            continue
-        if scope == "jobs" and employee["job"] not in job_set:
+        department = employee["department"].strip().upper()
+        job = employee["job"].strip().upper()
+        if scope == "departments":
+            # CNA is offered as a department-style print choice even though UKG
+            # stores CNA as the job under the NSG department.
+            matches_cna = "CNA" in department_set and department == "NSG" and job == "CNA"
+            matches_department = department in department_set
+            if not (matches_cna or matches_department):
+                continue
+        if scope == "jobs" and job not in job_set:
             continue
         if eligibility_end and employee["effective_hire"] and employee["effective_hire"] > eligibility_end:
             continue
