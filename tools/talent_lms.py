@@ -128,9 +128,23 @@ def match_employees(employees, matrix_rows):
             # correct account by capitalizing the entire TalentLMS user name.
             employee_key = normalize_name(f"{employee['first']} {employee['last']}")
             if employee_key in KNOWN_DUPLICATE_NAMES:
+                # Prefer the account HR marked in ALL CAPS when TalentLMS preserves
+                # that capitalization in the Training Matrix export.
                 capitalized_hits = [row for row in hits if row["user"].isupper()]
                 if len(capitalized_hits) == 1:
                     unique.append((employee, capitalized_hits[0]))
+                    continue
+
+                # Some TalentLMS exports title-case duplicate names (for example,
+                # both Bridget Horn rows export as "Horn Bridget"). For these four
+                # known duplicate employees only, fall back to the account with the
+                # most recorded training activity. Require a single clear winner.
+                def activity_count(row):
+                    return sum(value not in (None, "") for value in row["values"][1:])
+
+                ranked_hits = sorted(hits, key=activity_count, reverse=True)
+                if len(ranked_hits) >= 2 and activity_count(ranked_hits[0]) > activity_count(ranked_hits[1]):
+                    unique.append((employee, ranked_hits[0]))
                     continue
             duplicates.append({"employee": employee, "matrix_names": [row["user"] for row in hits]})
         else:

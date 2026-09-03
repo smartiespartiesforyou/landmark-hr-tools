@@ -112,6 +112,11 @@ def applicant_tracker():
     return render_template("applicant_tracker.html")
 
 
+@app.route("/sunshine-aide-tracker")
+def sunshine_aide_tracker():
+    return render_template("sunshine_aide_tracker.html")
+
+
 def review_timesheets(pdf_path):
     grouped_records = {}
     preview_rows = []

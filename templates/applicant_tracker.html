@@ -233,7 +233,8 @@ function render() {
 
     $('applicantRows').innerHTML = visible.length ? visible.map(a => {
         const [status,next,klass] = statusFor(a);
-        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
+        const sunshineMove = status === 'Hired' && (a.position || '').toLowerCase().includes('sunshine') ? `<button class="secondary" onclick="moveToSunshine('${a.id}')">Move to Sunshine Tracker</button>` : '';
+        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button>${sunshineMove}<button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
     }).join('') : '<tr><td colspan="6">No applicants match this view.</td></tr>';
     refreshOptions();
 }
@@ -256,6 +257,37 @@ window.editApplicant = id => {
     const a = applicants.find(x => x.id === id); if (!a) return;
     $('applicantId').value = a.id; fields.forEach(f => $(f).value = a[f] || '');
     $('formTitle').textContent = 'Update ' + a.name; $('applicantDialog').showModal();
+};
+
+
+window.moveToSunshine = id => {
+    const a = applicants.find(x => x.id === id); if (!a) return;
+    const status = statusFor(a)[0];
+    if (status !== 'Hired') { alert('Only a Sunshine Aide who has attended orientation can be moved to the Sunshine Aide Tracker.'); return; }
+    const key = 'landmarkSunshineAideTrackerV1';
+    let sunshine = [];
+    try { const stored = JSON.parse(localStorage.getItem(key)); sunshine = Array.isArray(stored) ? stored : []; } catch { sunshine = []; }
+    if (sunshine.some(r => r.sourceApplicantId === a.id)) {
+        alert(a.name + ' is already in the Sunshine Aide Tracker.');
+        return;
+    }
+    const hireDate = a.orientation2Result === 'Attended' && a.orientation2 ? a.orientation2 : a.orientation1;
+    const due = hireDate ? new Date(hireDate + 'T12:00:00') : null;
+    if (due) due.setDate(due.getDate() + 30);
+    const evaluationDueDate = due ? due.toISOString().slice(0,10) : '';
+    sunshine.push({
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        sourceApplicantId: a.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        name: a.name || '', phone: a.phone || '', email: a.email || '', shift: a.shift || '',
+        hireDate: hireDate || '', supervisor: '', evaluationDueDate,
+        manualStatus:'', attendance:'', punctuality:'', residentInteraction:'', followsDirections:'', teamwork:'', reliability:'',
+        evaluationDate:'', schoolDecision:'', decisionReason:'', recommendDate:'', schoolStartDate:'', schoolCompletionDate:'',
+        examResult:'', certificationDate:'', cnaConversionDate:'', exitDate:'', exitReason:'', notes:''
+    });
+    localStorage.setItem(key, JSON.stringify(sunshine));
+    if (confirm(a.name + ' was added to the Sunshine Aide Tracker. Open it now?')) location.href = '/sunshine-aide-tracker';
 };
 
 window.deleteApplicant = id => {
