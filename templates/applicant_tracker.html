@@ -197,7 +197,10 @@ function saveApplicants() {
 }
 
 function statusFor(a) {
-    if (a.orientation1Result === 'Attended' || a.orientation2Result === 'Attended') return ['Hired', 'Completed', 'done'];
+    if (a.orientation1Result === 'Attended' || a.orientation2Result === 'Attended') {
+        if ((a.position || '').toLowerCase().includes('sunshine') && a.sunshineTransferredAt) return ['Hired—See Sunshine Tracker', 'Post-hire progress is tracked in Sunshine Aide Tracker', 'done'];
+        return ['Hired', 'Completed', 'done'];
+    }
     if (a.orientation1Result === 'No-Show' && a.orientation2Result === 'No-Show') return ['Closed—Two Orientation No-Shows', 'Application closed', 'closed'];
     if (a.manualClose) return ['Closed—' + a.manualClose, 'Application closed', 'closed'];
     if (a.backgroundReview === 'Applicant Documentation Needed') return ['Applicant Documentation Needed', 'Applicant must send conviction information', 'attention'];
@@ -233,8 +236,10 @@ function render() {
 
     $('applicantRows').innerHTML = visible.length ? visible.map(a => {
         const [status,next,klass] = statusFor(a);
-        const sunshineMove = status === 'Hired' && (a.position || '').toLowerCase().includes('sunshine') ? `<button class="secondary" onclick="moveToSunshine('${a.id}')">Move to Sunshine Tracker</button>` : '';
-        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button>${sunshineMove}<button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
+        const isSunshine = (a.position || '').toLowerCase().includes('sunshine');
+        const sunshineMove = status === 'Hired' && isSunshine && !a.sunshineTransferredAt ? `<button class="secondary" onclick="moveToSunshine('${a.id}')">Move to Sunshine Tracker</button>` : '';
+        const sunshineOpen = status === 'Hired—See Sunshine Tracker' && isSunshine ? `<button class="secondary" onclick="location.href='/sunshine-aide-tracker'">See Sunshine Tracker</button>` : '';
+        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button>${sunshineMove}${sunshineOpen}<button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
     }).join('') : '<tr><td colspan="6">No applicants match this view.</td></tr>';
     refreshOptions();
 }
@@ -263,11 +268,12 @@ window.editApplicant = id => {
 window.moveToSunshine = id => {
     const a = applicants.find(x => x.id === id); if (!a) return;
     const status = statusFor(a)[0];
-    if (status !== 'Hired') { alert('Only a Sunshine Aide who has attended orientation can be moved to the Sunshine Aide Tracker.'); return; }
+    if (!['Hired','Hired—See Sunshine Tracker'].includes(status)) { alert('Only a Sunshine Aide who has attended orientation can be moved to the Sunshine Aide Tracker.'); return; }
     const key = 'landmarkSunshineAideTrackerV1';
     let sunshine = [];
     try { const stored = JSON.parse(localStorage.getItem(key)); sunshine = Array.isArray(stored) ? stored : []; } catch { sunshine = []; }
     if (sunshine.some(r => r.sourceApplicantId === a.id)) {
+        if (!a.sunshineTransferredAt) { a.sunshineTransferredAt = new Date().toISOString(); a.updatedAt = new Date().toISOString(); saveApplicants(); }
         alert(a.name + ' is already in the Sunshine Aide Tracker.');
         return;
     }
@@ -287,6 +293,9 @@ window.moveToSunshine = id => {
         examResult:'', certificationDate:'', cnaConversionDate:'', exitDate:'', exitReason:'', notes:''
     });
     localStorage.setItem(key, JSON.stringify(sunshine));
+    a.sunshineTransferredAt = new Date().toISOString();
+    a.updatedAt = new Date().toISOString();
+    saveApplicants();
     if (confirm(a.name + ' was added to the Sunshine Aide Tracker. Open it now?')) location.href = '/sunshine-aide-tracker';
 };
 
