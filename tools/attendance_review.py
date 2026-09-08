@@ -207,12 +207,9 @@ def build_daily_review(worked_time_path, lunch_path):
         location_5 = next((r["location_5"] for r in rows if r["location_5"]), "")
         clock_ins = [r["clock_in"] for r in rows if r["clock_in"] is not None]
         clock_outs = [r["clock_out"] for r in rows if r["clock_out"] is not None]
-        # Determine punch completeness from the actual IN/OUT pairs.
-        # UKG's "# Incomplete Records" field can be nonzero on otherwise usable
-        # days (for example, holiday/schedule exception days), so it must not
-        # automatically classify the employee as having an incomplete punch.
         has_incomplete_segment = any(r["clock_in"] is None or r["clock_out"] is None for r in rows)
-        if has_incomplete_segment or not clock_ins or not clock_outs:
+        has_incomplete_record = any(r["incomplete_records"] > 0 for r in rows)
+        if has_incomplete_record or has_incomplete_segment or not clock_ins or not clock_outs:
             results.append({"department": "Incomplete Punches / Still Working", "employee": _display_name(last, first), "date": work_date, "clock_in": "-", "clock_out": "-", "lunch": "Review", "lunch_minutes": "-"})
             continue
 
