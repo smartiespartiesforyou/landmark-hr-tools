@@ -48,14 +48,19 @@
         #printArea { display:none; }
         @media (max-width:850px) { .grid { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } }
         @media print {
-            body * { visibility:hidden; }
-            #printArea, #printArea * { visibility:visible; }
-            #printArea { display:block; position:absolute; inset:0; padding:0.35in; color:black; }
-            #printArea h1 { font-size:24pt; margin:0 0 8px; }
-            #printArea .print-date { font-size:13pt; margin-bottom:18px; }
-            #printArea table { font-size:15pt; }
+            body > header, body > main, body > dialog { display:none !important; }
+            #printArea { display:block !important; position:static; padding:0; color:black; }
+            #printArea h1 { font-size:20pt; margin:0 0 6px; }
+            #printArea .print-date { font-size:11pt; margin-bottom:10px; }
+            #printArea table { font-size:11pt; width:100%; page-break-inside:auto; }
+            #printArea thead { display:table-header-group; }
+            #printArea tr { page-break-inside:avoid; page-break-after:auto; }
             #printArea th { background:#ddd !important; color:black; }
-            #printArea th, #printArea td { border:2px solid #555; padding:12px; }
+            #printArea th, #printArea td { border:1px solid #555; padding:7px; }
+            #printArea .staffing-needs { margin-top:14px; border:1px solid #555; padding:10px 12px; page-break-inside:avoid; font-size:11pt; }
+            #printArea .staffing-needs h2 { font-size:14pt; margin:0 0 8px; }
+            #printArea .staffing-line { margin:9px 0; }
+            #printArea .blank-line { display:inline-block; min-width:420px; border-bottom:1px solid #222; height:15px; vertical-align:bottom; }
             @page { size:landscape; margin:0.35in; }
         }
     </style>
@@ -167,6 +172,7 @@ let emailDraft = null;
 
 const $ = id => document.getElementById(id);
 const todayText = () => new Date().toLocaleDateString();
+const printTimestampText = () => new Date().toLocaleString([], {year:'numeric', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'});
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtDate = value => value ? new Date(value + 'T12:00:00').toLocaleDateString() : '';
 function businessDaysElapsed(startValue, endValue = new Date()) {
@@ -524,9 +530,13 @@ $('importFile').onchange = async e => {
 };
 
 $('runPrint').onclick = () => {
-    const position=$('printPosition').value; const rows=applicants.filter(a => !position || a.position===position).filter(a => !statusFor(a)[0].startsWith('Closed') && statusFor(a)[0] !== 'Hired');
-    $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Update')}</h1><div class="print-date">Printed ${todayText()}${position ? ' — ' + esc(position) : ''}</div><table><thead><tr><th>Applicant</th><th>Position / Shift</th><th>Current Stage</th><th>Next Step</th></tr></thead><tbody>${rows.length ? rows.map(a=>{const [s,n]=statusFor(a);return `<tr><td>${esc(a.name)}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(s)}</td><td>${esc(n)}</td></tr>`}).join('') : '<tr><td colspan="4">No active applicants.</td></tr>'}</tbody></table>`;
-    $('printDialog').close(); window.print();
+    const position=$('printPosition').value;
+    const rows=applicants
+        .filter(a => !position || a.position===position)
+        .filter(a => !statusFor(a)[0].startsWith('Closed') && statusFor(a)[0] !== 'Hired');
+    $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Update')}</h1><div class="print-date">Printed ${esc(printTimestampText())}${position ? ' — ' + esc(position) : ''}</div><table><thead><tr><th>Applicant</th><th>Phone</th><th>Position / Shift</th><th>Current Stage</th><th>Next Step</th></tr></thead><tbody>${rows.length ? rows.map(a=>{const [s,n]=statusFor(a);return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(s)}</td><td>${esc(n)}</td></tr>`}).join('') : '<tr><td colspan="5">No active applicants.</td></tr>'}</tbody></table><div class="staffing-needs"><h2>Supervisor Staffing Needs</h2><div class="staffing-line"><strong>What position(s) do you currently need filled?</strong> <span class="blank-line"></span></div><div class="staffing-line"><strong>Would you like HR to start an Indeed listing?</strong> &nbsp; &#9633; Yes &nbsp;&nbsp; &#9633; No</div><div class="staffing-line"><strong>If yes, position(s) to list:</strong> <span class="blank-line"></span></div></div>`;
+    $('printDialog').close();
+    window.print();
 };
 
 render();
