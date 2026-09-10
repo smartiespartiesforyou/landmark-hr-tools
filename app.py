@@ -38,6 +38,7 @@ from tools.birthday_anniversary import (
     create_birthday_anniversary_pdf,
     read_birthdays_and_anniversaries,
 )
+from tools.weekend_cna_differential import calculate_weekend_cna_differential
 
 
 app = Flask(__name__)
@@ -115,6 +116,36 @@ def applicant_tracker():
 @app.route("/sunshine-aide-tracker")
 def sunshine_aide_tracker():
     return render_template("sunshine_aide_tracker.html")
+
+@app.route("/weekend-cna-differential", methods=["GET", "POST"])
+def weekend_cna_differential():
+    if request.method == "GET":
+        return render_template("weekend_cna_differential.html")
+
+    report_file = request.files.get("report_file")
+    if not report_file or not report_file.filename:
+        return render_template(
+            "weekend_cna_differential.html",
+            error="Choose the UKG Calculated Hours By Work Day Excel report first.",
+        ), 400
+
+    temp_folder = tempfile.mkdtemp()
+    report_path = os.path.join(temp_folder, "weekend_workers.xlsx")
+    report_file.save(report_path)
+
+    try:
+        summary = calculate_weekend_cna_differential(report_path)
+        return render_template(
+            "weekend_cna_differential.html",
+            summary=summary,
+            filename=report_file.filename,
+        )
+    except Exception as error:
+        return render_template(
+            "weekend_cna_differential.html",
+            error=str(error),
+        ), 400
+
 
 
 def review_timesheets(pdf_path):
