@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekend CNA Differential</title>
+    <style>
+        :root {
+            --green: #1f5b45;
+            --light: #eef5f1;
+            --border: #d4ddd8;
+            --text: #1f2933;
+            --muted: #667085;
+            --danger: #9b1c1c;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: var(--text);
+            background: #f7f8f7;
+            margin: 0;
+            padding: 28px 18px;
+        }
+        .wrap {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 28px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.06);
+        }
+        h1 { margin: 0 0 8px; color: var(--green); }
+        .sub { margin: 0 0 24px; color: var(--muted); }
+        .upload-box {
+            padding: 20px;
+            background: var(--light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 22px;
+        }
+        input[type=file] { margin: 10px 0 14px; width: 100%; }
+        button, .button {
+            display: inline-block;
+            border: 0;
+            background: var(--green);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .error {
+            background: #fff0f0;
+            border: 1px solid #efb4b4;
+            color: var(--danger);
+            padding: 12px 14px;
+            border-radius: 6px;
+            margin-bottom: 18px;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 18px 0;
+        }
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+        }
+        .card .label { color: var(--muted); font-size: 13px; }
+        .card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        th, td {
+            border-bottom: 1px solid var(--border);
+            padding: 10px 8px;
+            text-align: left;
+        }
+        th { background: var(--light); color: var(--green); }
+        td.num, th.num { text-align: right; }
+        tfoot td { font-weight: 700; border-top: 2px solid var(--green); }
+        .note { color: var(--muted); font-size: 13px; margin-top: 16px; }
+        .actions { margin-top: 18px; display: flex; gap: 10px; }
+        @media (max-width: 650px) {
+            .cards { grid-template-columns: 1fr; }
+            .wrap { padding: 18px; }
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .wrap { border: 0; box-shadow: none; max-width: none; }
+            .upload-box, .actions, .home-link { display: none; }
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>Weekend CNA Differential</h1>
+    <p class="sub">Upload the UKG <b>Calculated Hours By Work Day</b> report. The tool totals actual CNA work hours on Saturday and Sunday and calculates the <b>$4.00/hour</b> weekend differential.</p>
+
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form class="upload-box" method="post" enctype="multipart/form-data">
+        <label for="report_file"><b>UKG Weekend Workers Payroll Excel Report</b></label><br>
+        <input id="report_file" name="report_file" type="file" accept=".xlsx,.xlsm" required>
+        <button type="submit">Calculate Weekend Pay</button>
+    </form>
+
+    {% if summary %}
+        <p><b>Report:</b> {{ filename }}</p>
+        <div class="cards">
+            <div class="card"><div class="label">CNAs Worked</div><div class="value">{{ summary.employee_count }}</div></div>
+            <div class="card"><div class="label">Weekend Hours</div><div class="value">{{ "%.2f"|format(summary.total_hours) }}</div></div>
+            <div class="card"><div class="label">Total Differential Owed</div><div class="value">${{ "%.2f"|format(summary.total_owed) }}</div></div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th class="num">Weekend Hours</th>
+                    <th class="num">Rate</th>
+                    <th class="num">Amount Owed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in summary.results %}
+                <tr>
+                    <td>{{ row.name }}</td>
+                    <td class="num">{{ "%.2f"|format(row.hours) }}</td>
+                    <td class="num">${{ "%.2f"|format(summary.rate) }}</td>
+                    <td class="num"><b>${{ "%.2f"|format(row.owed) }}</b></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td>TOTAL</td>
+                    <td class="num">{{ "%.2f"|format(summary.total_hours) }}</td>
+                    <td></td>
+                    <td class="num">${{ "%.2f"|format(summary.total_owed) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <p class="note">Only numeric <b>Total Work Hours</b> are paid. PTO/excused-absence hours are not included. Rows dated outside Saturday or Sunday are ignored automatically.</p>
+        <div class="actions">
+            <button type="button" onclick="window.print()">Print Results</button>
+            <a class="button" href="/weekend-cna-differential">Run Another Report</a>
+        </div>
+    {% endif %}
+
+    <p class="home-link" style="margin-top:24px;"><a href="/">← Landmark HR Tools</a></p>
+</div>
+</body>
+</html>
