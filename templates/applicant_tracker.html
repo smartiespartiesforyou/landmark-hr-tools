@@ -449,13 +449,10 @@ window.showEmailMenu = id => {
             return;
         }
     }
-    const sunshineSubject = (a.position || '').toLowerCase().includes('sunshine')
-        ? `MUST REPLY TO THIS EMAIL - ${selected.subject}`
-        : selected.subject;
-    emailDraft = {...selected, subject:sunshineSubject, to:a.email, applicantId:a.id};
+    emailDraft = {...selected, to:a.email, applicantId:a.id};
     $('emailTitle').textContent = selected.label;
     $('emailTo').textContent = a.email;
-    $('emailSubject').textContent = sunshineSubject;
+    $('emailSubject').textContent = selected.subject;
     const attachmentBox = $('emailAttachments');
     if (selected.attachments) {
         attachmentBox.textContent = selected.attachments;
@@ -471,12 +468,14 @@ window.showEmailMenu = id => {
 
 $('applicantForm').addEventListener('submit', e => {
     e.preventDefault(); const id = $('applicantId').value; const old = applicants.find(a => a.id === id);
-    const isSunshineApplicant = (($('position').value || '').toLowerCase().includes('sunshine'));
-    for (const dateField of ['orientation1','orientation2']) {
-        if (!isSunshineApplicant && $(dateField).value && new Date($(dateField).value + 'T12:00:00').getDay() !== 2) {
-            alert('Orientation must be scheduled on a Tuesday. Please correct the orientation date.');
-            $(dateField).focus();
-            return;
+    const isSunshineAide = ($('position').value || '').toLowerCase().includes('sunshine');
+    if (!isSunshineAide) {
+        for (const dateField of ['orientation1','orientation2']) {
+            if ($(dateField).value && new Date($(dateField).value + 'T12:00:00').getDay() !== 2) {
+                alert('Orientation must be scheduled on a Tuesday. Please correct the orientation date.');
+                $(dateField).focus();
+                return;
+            }
         }
     }
     const record = {id: id || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())), createdAt: old?.createdAt || new Date().toISOString()};
