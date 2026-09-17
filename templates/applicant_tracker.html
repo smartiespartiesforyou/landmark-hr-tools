@@ -204,7 +204,6 @@ function saveApplicants() {
 
 function statusFor(a) {
     if (a.orientation1Result === 'Attended' || a.orientation2Result === 'Attended') {
-        if ((a.position || '').toLowerCase().includes('sunshine')) return ['Hired—See Sunshine Tracker', 'Post-hire progress is tracked in Sunshine Aide Tracker', 'done'];
         return ['Hired', 'Completed', 'done'];
     }
     if (a.orientation1Result === 'No-Show' && a.orientation2Result === 'No-Show') return ['Closed—Two Orientation No-Shows', 'Application closed', 'closed'];
@@ -242,10 +241,7 @@ function render() {
 
     $('applicantRows').innerHTML = visible.length ? visible.map(a => {
         const [status,next,klass] = statusFor(a);
-        const isSunshine = (a.position || '').toLowerCase().includes('sunshine');
-        const sunshineMove = '';
-        const sunshineOpen = isSunshine ? `<button class="secondary" onclick="location.href='/sunshine-aide-tracker'">See Sunshine Tracker</button>` : '';
-        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button>${sunshineMove}${sunshineOpen}<button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
+        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
     }).join('') : '<tr><td colspan="6">No applicants match this view.</td></tr>';
     refreshOptions();
 }
