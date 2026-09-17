@@ -464,16 +464,6 @@ window.showEmailMenu = id => {
 
 $('applicantForm').addEventListener('submit', e => {
     e.preventDefault(); const id = $('applicantId').value; const old = applicants.find(a => a.id === id);
-    const isSunshineAide = ($('position').value || '').toLowerCase().includes('sunshine');
-    if (!isSunshineAide) {
-        for (const dateField of ['orientation1','orientation2']) {
-            if ($(dateField).value && new Date($(dateField).value + 'T12:00:00').getDay() !== 2) {
-                alert('Orientation must be scheduled on a Tuesday. Please correct the orientation date.');
-                $(dateField).focus();
-                return;
-            }
-        }
-    }
     const record = {id: id || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())), createdAt: old?.createdAt || new Date().toISOString()};
     fields.forEach(f => record[f] = $(f).value.trim());
     record.emailLog = old?.emailLog || {};
