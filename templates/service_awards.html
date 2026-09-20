@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Service Award Review</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1100px; margin: 36px auto; padding: 0 20px; color: #222; }
+        .card { border: 1px solid #ccc; border-radius: 8px; padding: 24px; margin: 20px 0; }
+        label { display: block; font-weight: bold; margin-top: 18px; }
+        input { display: block; margin-top: 7px; }
+        input[type="number"], input[type="text"] { padding: 8px; width: min(360px, 92%); }
+        button { display: block; margin-top: 24px; padding: 11px 18px; font-weight: bold; cursor: pointer; }
+        .note, .warning { margin-top: 20px; padding: 14px; line-height: 1.5; }
+        .note { background: #f5f5f5; }
+        .warning { background: #fff4cc; border-left: 5px solid #c28a00; }
+        .summary { display: flex; gap: 12px; flex-wrap: wrap; margin: 18px 0; }
+        .summary div { background: #eef4f8; border-radius: 6px; padding: 12px 16px; }
+        table { width: 100%; border-collapse: collapse; margin: 14px 0 26px; }
+        th, td { border: 1px solid #aaa; padding: 8px; text-align: left; vertical-align: top; }
+        th { background: #174f79; color: white; }
+        tbody tr:nth-child(even) { background: #f3f6f8; }
+        .number { text-align: center; }
+        a { color: #174f79; }
+        .print-only { display: none; }
+        @media print {
+            body { max-width: none; margin: 0; padding: 0.3in; font-size: 10pt; }
+            .no-print { display: none !important; }
+            .print-only { display: block; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; }
+            th { background: #ddd !important; color: black !important; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Service Award Review</h1>
+    <p>Find full-time employees reaching a company service-award milestone.</p>
+
+    {% if not results %}
+    <div class="card">
+        <form method="POST" enctype="multipart/form-data">
+            <label for="ukg_file">UKG employee Excel report</label>
+            <input id="ukg_file" name="ukg_file" type="file" accept=".xlsx" required>
+
+            <label for="award_year">Award year</label>
+            <input id="award_year" name="award_year" type="number" min="2000" max="2100" value="{{ default_year }}" required>
+
+            <label for="milestones">Qualifying years of service</label>
+            <input id="milestones" name="milestones" type="text" placeholder="Example: 5, 10, 15, 20" required>
+
+            <button type="submit">Create Service Award Review</button>
+        </form>
+
+        <div class="note">
+            <b>Use the milestones listed in the current service-award instructions.</b>
+            Do not guess them. The report should include employee name, employee number, latest hire/rehire
+            or adjusted service date, active status, employee type, and gender whenever UKG offers those fields.
+        </div>
+    </div>
+    {% else %}
+    <p class="print-only"><b>Landmark South Nursing and Rehabilitation Center</b></p>
+    <p><b>Award year:</b> {{ award_year }} &nbsp; <b>Milestones:</b> {{ milestones|join(', ') }} years</p>
+
+    <div class="summary">
+        <div><b>{{ eligible|length }}</b> ready for AD-297</div>
+        <div><b>{{ needs_review|length }}</b> need HR review</div>
+        <div><b>{{ excluded.not_full_time }}</b> part-time/PRN excluded</div>
+        <div><b>{{ excluded.inactive }}</b> inactive excluded</div>
+    </div>
+
+    <h2>Ready for AD-297</h2>
+    {% if eligible %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th><th>Employee #</th><th>Service Date</th><th>Years</th><th>Gender</th><th>Date Used</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for employee in eligible %}
+            <tr>
+                <td>{{ employee.name }}</td>
+                <td>{{ employee.employee_id }}</td>
+                <td>{{ employee.service_date.strftime('%m/%d/%Y') }}</td>
+                <td class="number">{{ employee.years }}</td>
+                <td>{{ employee.gender }}</td>
+                <td>{{ employee.date_source }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No employees are ready to copy to AD-297.</p>
+    {% endif %}
+
+    <h2>Needs HR Review</h2>
+    {% if needs_review %}
+    <div class="warning">Do not copy these employees to AD-297 until the listed issue is verified.</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th><th>Employee #</th><th>Service Date</th><th>Years</th><th>Employee Type</th><th>Review Needed</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for employee in needs_review %}
+            <tr>
+                <td>{{ employee.name }}</td>
+                <td>{{ employee.employee_id or 'Not provided' }}</td>
+                <td>{{ employee.service_date.strftime('%m/%d/%Y') if employee.service_date else 'Not provided' }}</td>
+                <td class="number">{{ employee.years if employee.years is defined else '—' }}</td>
+                <td>{{ employee.employment_type or 'Not provided' }}</td>
+                <td><b>{{ employee.review_reason }}</b></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No employee records require additional review.</p>
+    {% endif %}
+
+    <p><b>Other records excluded:</b> {{ excluded.not_milestone }} did not reach a selected milestone; {{ excluded.missing_date }} had no usable date.</p>
+    <button class="no-print" type="button" onclick="window.print()">Print Review List</button>
+    <p class="no-print"><a href="/service-awards">Run another report</a></p>
+    {% endif %}
+
+    <p class="no-print"><a href="/">Home</a></p>
+</body>
+</html>
