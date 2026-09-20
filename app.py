@@ -6,6 +6,7 @@ from reportlab.lib.colors import HexColor
 import csv
 import os
 import secrets
+import shutil
 import tempfile
 import time
 import zipfile
@@ -39,6 +40,11 @@ from tools.birthday_anniversary import (
     read_birthdays_and_anniversaries,
 )
 from tools.weekend_cna_differential import calculate_weekend_cna_differential
+from tools.service_awards import (
+    parse_milestones,
+    read_service_award_employees,
+    service_award_review,
+)
 
 
 app = Flask(__name__)
@@ -861,6 +867,58 @@ def birthdays_anniversaries():
             <p>{error}</p>
             <p><a href='/birthdays-anniversaries'>Try again</a></p>
         """, 400
+
+
+@app.route("/service-awards", methods=["GET", "POST"])
+def service_awards():
+    if request.method == "GET":
+        return render_template(
+            "service_awards.html",
+            default_year=datetime.now().year,
+            results=False,
+        )
+
+    ukg_file = request.files.get("ukg_file")
+    if not ukg_file or not ukg_file.filename:
+        return "<h2>Error</h2><p>Choose the UKG employee Excel report.</p>", 400
+    if not ukg_file.filename.lower().endswith(".xlsx"):
+        return "<h2>Error</h2><p>The UKG report must be an .xlsx Excel file.</p>", 400
+
+    try:
+        award_year = int(request.form.get("award_year", ""))
+        if award_year < 2000 or award_year > 2100:
+            raise ValueError("Enter a valid award year.")
+        milestones = parse_milestones(request.form.get("milestones", ""))
+    except (TypeError, ValueError) as error:
+        return f"<h2>Error</h2><p>{error}</p><p><a href='/service-awards'>Try again</a></p>", 400
+
+    temp_folder = tempfile.mkdtemp()
+    input_path = os.path.join(temp_folder, "ukg_service_awards.xlsx")
+    try:
+        ukg_file.save(input_path)
+        employees = read_service_award_employees(input_path)
+        eligible, needs_review, excluded = service_award_review(
+            employees,
+            award_year,
+            milestones,
+        )
+        return render_template(
+            "service_awards.html",
+            results=True,
+            award_year=award_year,
+            milestones=milestones,
+            eligible=eligible,
+            needs_review=needs_review,
+            excluded=excluded,
+        )
+    except Exception as error:
+        return f"""
+            <h2>Could not create the service award review</h2>
+            <p>{error}</p>
+            <p><a href='/service-awards'>Try again</a></p>
+        """, 400
+    finally:
+        shutil.rmtree(temp_folder, ignore_errors=True)
 
 
 if __name__ == "__main__":
