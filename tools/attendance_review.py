@@ -126,7 +126,7 @@ def _inferred_lunch_entries(rows):
     for earlier, later in zip(ordered, ordered[1:]):
         gap_minutes = (later["clock_in"] - earlier["clock_out"]).total_seconds() / 60
         exceptions = f"{earlier['exceptions']} {later['exceptions']}".upper()
-        is_ukg_break_exception = "MB OVER 8" in exceptions or "LONG INTRV" in exceptions
+        is_ukg_break_exception = "MB OVER" in exceptions or "LONG INTRV" in exceptions
         if is_ukg_break_exception and MINIMUM_INFERRED_LUNCH_MINUTES <= gap_minutes <= MAXIMUM_INFERRED_LUNCH_MINUTES:
             entries.append(gap_minutes / 60)
     return entries
@@ -215,11 +215,14 @@ def build_daily_review(worked_time_path, lunch_path):
 
         first_in, final_out = min(clock_ins), max(clock_outs)
         worked_hours = sum(r["worked"] for r in rows)
-        lunch_entries = lunches.get((name_key, work_date), [])
-        if not lunch_entries:
-            lunch_entries = _inferred_lunch_entries(rows)
-        lunch_minutes = int(round(sum(lunch_entries) * 60))
+        recorded_lunch_entries = list(lunches.get((name_key, work_date), []))
+        inferred_lunch_entries = _inferred_lunch_entries(rows)
         expected_breaks = _expected_breaks(rows)
+        lunch_entries = list(recorded_lunch_entries)
+        lunches_needed = max(0, expected_breaks - len(lunch_entries))
+        if lunches_needed:
+            lunch_entries.extend(inferred_lunch_entries[:lunches_needed])
+        lunch_minutes = int(round(sum(lunch_entries) * 60))
         nurse_exempt = (
             location_5.upper() in {"LPN", "RGN"}
             and name_key not in LUNCH_REQUIRED_EMPLOYEES
