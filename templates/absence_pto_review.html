@@ -34,7 +34,7 @@
 <h1>Daily Absence & PTO Review</h1>
 <p>Upload the customized UKG <b>Late / Early / Absent Report</b> Excel file.</p>
 {% if not results %}
-<div class="note">Uses UKG's <b>Scheduled But Absent</b>, <b>Employee Status</b>, <b>Time Off Name</b>, <b>Time Off Hours</b>, and <b>Actual Jobs (HR) Full Path</b> fields.</div>
+<div class="note">Uses UKG's <b>Scheduled But Absent</b>, <b>Time Off Name</b>, <b>Time Off Hours</b>, and <b>Actual Jobs (HR) Full Path</b> fields.</div>
 {% if error %}<p><b>{{ error }}</b></p>{% endif %}
 <form method="POST" enctype="multipart/form-data">
   <input type="file" name="report_file" accept=".xlsx" required><br>
@@ -43,25 +43,20 @@
 {% else %}
 <p class="count">Report date: {{ report_date }}</p>
 
-<h2>FMLA ({{ fmla|length }})</h2>
-<table><tr><th>Employee</th><th>Scheduled Shift</th><th>Status</th></tr>
-{% for r in fmla %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>FMLA</td></tr>{% else %}<tr><td colspan="3">None</td></tr>{% endfor %}
-</table>
-
 <h2>PTO / Approved Time Off ({{ time_off|length }})</h2>
 <table><tr><th>Employee</th><th>Scheduled Shift</th><th>Type</th><th>Hours</th></tr>
 {% for r in time_off %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>{{ r.time_off_name }}</td><td>{{ "%.2f"|format(r.time_off_hours)|replace(".00","") }}</td></tr>{% else %}<tr><td colspan="4">None</td></tr>{% endfor %}
 </table>
 
 <h2>Absence Review ({{ absence_review|length }})</h2>
-<p>UKG marked these employees <b>Scheduled But Absent = Yes</b>, with no PTO/approved time off or FMLA identified by this report.</p>
+<p>UKG marked these employees <b>Scheduled But Absent = Yes</b>, with no PTO/approved time off identified by this report.</p>
 <table><tr><th>Employee</th><th>Department</th><th>Scheduled Shift</th><th>Status</th></tr>
 {% for r in absence_review %}<tr><td>{{ r.name }}</td><td>{{ r.department }}</td><td>{{ r.scheduled }}</td><td>{{ r.status }}</td></tr>{% else %}<tr><td colspan="4">None</td></tr>{% endfor %}
 </table>
 
 {% if absence_review %}
 <button type="button" onclick="window.print()">Print Department Head Sheets</button>
-<p><small>The printed packet contains only employees needing absence follow-up, separated by department. FMLA and PTO information are not printed.</small></p>
+<p><small>The printed packet contains only employees needing absence follow-up, separated by department. PTO information is not printed.</small></p>
 {% endif %}
 
 <h2>Worked + Time Off / Punch Review ({{ partial_or_review|length }})</h2>
