@@ -26,6 +26,24 @@ def _yes(value):
     return _clean(value).lower() in {"yes", "y", "true", "1"}
 
 
+def _department(row):
+    path = _clean(row.get("Actual Jobs (HR) Full Path"))
+    upper = path.upper()
+    job = upper.split(">")[-1].split("/")[-1].strip() if path else ""
+    if "CNA" in upper:
+        return "CNAs"
+    if "SUNSHINE" in upper:
+        return "Sunshine Aides"
+    if "NSG" in upper or "NURS" in upper:
+        return "Nursing"
+    parts = [p.strip() for p in path.replace(">", "/").split("/") if p.strip()]
+    if parts:
+        for part in parts:
+            if part.upper() not in {"LM SOUTH", "LANDMARK SOUTH", "STF"}:
+                return part.title()
+    return "Other"
+
+
 def review_absence_pto(path):
     raw = pd.read_excel(path, header=None)
     header_row = None
@@ -41,7 +59,7 @@ def review_absence_pto(path):
     required = {
         "First Name", "Last Name", "Date", "Sch. Time In", "Sch. Time Out",
         "Actual Time In", "Actual Time Out", "Time Off Hours", "Time Off Name",
-        "Scheduled But Absent", "Employee Status"
+        "Scheduled But Absent", "Employee Status", "Actual Jobs (HR) Full Path"
     }
     missing = sorted(required.difference(data.columns))
     if missing:
@@ -72,6 +90,7 @@ def review_absence_pto(path):
         item = {
             "name": f"{first.title()} {last.title()}",
             "date": date.date(),
+            "department": _department(row),
             "scheduled": f"{scheduled_in} – {scheduled_out}" if scheduled_in or scheduled_out else "Not scheduled",
             "actual": f"{actual_in or '—'} – {actual_out or '—'}",
             "time_off_hours": off_hours,
@@ -79,7 +98,6 @@ def review_absence_pto(path):
             "employee_status": employee_status,
         }
 
-        # FMLA is separated first so it never appears as an ordinary absence.
         if is_fmla and scheduled_absent:
             item["status"] = "FMLA"
             fmla.append(item)
@@ -97,5 +115,6 @@ def review_absence_pto(path):
             item["status"] = "Incomplete Punch"
             partial_or_review.append(item)
 
+    absence_review.sort(key=lambda item: (item["department"], item["name"]))
     report_date = min(report_dates) if report_dates else None
     return report_date, absence_review, fmla, time_off, partial_or_review
