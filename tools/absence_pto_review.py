@@ -22,6 +22,10 @@ def _time(value):
     return _clean(value).replace("\n", " ").strip()
 
 
+def _yes(value):
+    return _clean(value).lower() in {"yes", "y", "true", "1"}
+
+
 def review_absence_pto(path):
     raw = pd.read_excel(path, header=None)
     header_row = None
@@ -36,13 +40,14 @@ def review_absence_pto(path):
     data = pd.read_excel(path, header=header_row)
     required = {
         "First Name", "Last Name", "Date", "Sch. Time In", "Sch. Time Out",
-        "Actual Time In", "Actual Time Out", "Time Off Hours", "Time Off Name"
+        "Actual Time In", "Actual Time Out", "Time Off Hours", "Time Off Name",
+        "Scheduled But Absent", "Employee Status"
     }
     missing = sorted(required.difference(data.columns))
     if missing:
         raise ValueError("This UKG report is missing: " + ", ".join(missing))
 
-    possible_absences, time_off, partial_or_review = [], [], []
+    absence_review, fmla, time_off, partial_or_review = [], [], [], []
     report_dates = []
 
     for _, row in data.iterrows():
@@ -57,34 +62,40 @@ def review_absence_pto(path):
         scheduled_in, scheduled_out = _time(row.get("Sch. Time In")), _time(row.get("Sch. Time Out"))
         actual_in, actual_out = _time(row.get("Actual Time In")), _time(row.get("Actual Time Out"))
         off_hours, off_name = _hours(row.get("Time Off Hours")), _clean(row.get("Time Off Name"))
-        name = f"{first.title()} {last.title()}"
+        employee_status = _clean(row.get("Employee Status"))
+        scheduled_absent = _yes(row.get("Scheduled But Absent"))
+        has_any_punch = bool(actual_in or actual_out)
+        has_complete_punches = bool(actual_in and actual_out)
+        has_time_off = bool(off_name or off_hours)
+        is_fmla = "FMLA" in employee_status.upper()
+
         item = {
-            "name": name,
+            "name": f"{first.title()} {last.title()}",
             "date": date.date(),
             "scheduled": f"{scheduled_in} – {scheduled_out}" if scheduled_in or scheduled_out else "Not scheduled",
             "actual": f"{actual_in or '—'} – {actual_out or '—'}",
             "time_off_hours": off_hours,
             "time_off_name": off_name or "Time Off",
+            "employee_status": employee_status,
         }
 
-        has_schedule = bool(scheduled_in or scheduled_out)
-        has_any_punch = bool(actual_in or actual_out)
-        has_complete_punches = bool(actual_in and actual_out)
-        has_time_off = bool(off_name or off_hours)
-
-        if has_time_off:
+        # FMLA is separated first so it never appears as an ordinary absence.
+        if is_fmla and scheduled_absent:
+            item["status"] = "FMLA"
+            fmla.append(item)
+        elif has_time_off:
             if has_any_punch:
                 item["status"] = "Worked + Time Off"
                 partial_or_review.append(item)
             else:
                 item["status"] = off_name or "Time Off"
                 time_off.append(item)
-        elif has_schedule and not has_any_punch:
-            item["status"] = "Possible Absence"
-            possible_absences.append(item)
-        elif has_schedule and not has_complete_punches:
+        elif scheduled_absent:
+            item["status"] = "Absence Review"
+            absence_review.append(item)
+        elif (scheduled_in or scheduled_out) and not has_complete_punches and has_any_punch:
             item["status"] = "Incomplete Punch"
             partial_or_review.append(item)
 
     report_date = min(report_dates) if report_dates else None
-    return report_date, possible_absences, time_off, partial_or_review
+    return report_date, absence_review, fmla, time_off, partial_or_review
