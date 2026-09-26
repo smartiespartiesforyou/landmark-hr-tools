@@ -7,18 +7,35 @@
     h1 { margin-bottom: 6px; }
     .note { background: #f3f5f7; padding: 12px 16px; border-radius: 8px; }
     table { border-collapse: collapse; width: 100%; margin: 12px 0 28px; }
-    th, td { border: 1px solid #ccc; padding: 9px; text-align: left; }
+    th, td { border: 1px solid #ccc; padding: 9px; text-align: left; vertical-align: top; }
     th { background: #f1f1f1; }
     .count { font-weight: bold; }
     input, button { font-size: 16px; margin-top: 10px; }
     button { padding: 9px 16px; cursor: pointer; }
+    .manager-packet { display: none; }
+    .manager-sheet { page-break-after: always; }
+    .manager-sheet:last-child { page-break-after: auto; }
+    .choice { line-height: 1.9; white-space: nowrap; }
+    .signature { margin-top: 30px; line-height: 2.3; }
+    @media print {
+      body { max-width: none; margin: 0; padding: 0.35in; font-size: 11pt; }
+      .screen-only { display: none !important; }
+      .manager-packet { display: block !important; }
+      .manager-sheet { break-after: page; page-break-after: always; }
+      .manager-sheet:last-child { break-after: auto; page-break-after: auto; }
+      .manager-sheet table { margin-bottom: 18px; }
+      .manager-sheet h1 { font-size: 18pt; }
+      .manager-sheet h2 { font-size: 14pt; }
+    }
   </style>
 </head>
 <body>
+<div class="screen-only">
 <h1>Daily Absence & PTO Review</h1>
 <p>Upload the customized UKG <b>Late / Early / Absent Report</b> Excel file.</p>
 {% if not results %}
-<div class="note">Uses UKG's <b>Scheduled But Absent</b>, <b>Employee Status</b>, <b>Time Off Name</b>, and <b>Time Off Hours</b> fields.</div>
+<div class="note">Uses UKG's <b>Scheduled But Absent</b>, <b>Employee Status</b>, <b>Time Off Name</b>, <b>Time Off Hours</b>, and <b>Actual Jobs (HR) Full Path</b> fields.</div>
+{% if error %}<p><b>{{ error }}</b></p>{% endif %}
 <form method="POST" enctype="multipart/form-data">
   <input type="file" name="report_file" accept=".xlsx" required><br>
   <button type="submit">Review Absences & PTO</button>
@@ -38,15 +55,52 @@
 
 <h2>Absence Review ({{ absence_review|length }})</h2>
 <p>UKG marked these employees <b>Scheduled But Absent = Yes</b>, with no PTO/approved time off or FMLA identified by this report.</p>
-<table><tr><th>Employee</th><th>Scheduled Shift</th><th>Status</th></tr>
-{% for r in absence_review %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>{{ r.status }}</td></tr>{% else %}<tr><td colspan="3">None</td></tr>{% endfor %}
+<table><tr><th>Employee</th><th>Department</th><th>Scheduled Shift</th><th>Status</th></tr>
+{% for r in absence_review %}<tr><td>{{ r.name }}</td><td>{{ r.department }}</td><td>{{ r.scheduled }}</td><td>{{ r.status }}</td></tr>{% else %}<tr><td colspan="4">None</td></tr>{% endfor %}
 </table>
+
+{% if absence_review %}
+<button type="button" onclick="window.print()">Print Department Head Sheets</button>
+<p><small>The printed packet contains only employees needing absence follow-up, separated by department. FMLA and PTO information are not printed.</small></p>
+{% endif %}
 
 <h2>Worked + Time Off / Punch Review ({{ partial_or_review|length }})</h2>
 <table><tr><th>Employee</th><th>Scheduled Shift</th><th>Actual</th><th>Status</th><th>Time Off</th></tr>
 {% for r in partial_or_review %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>{{ r.actual }}</td><td>{{ r.status }}</td><td>{% if r.time_off_hours %}{{ r.time_off_name }} — {{ r.time_off_hours }} hrs{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5">None</td></tr>{% endfor %}
 </table>
 <p><a href="/absence-pto-review">Run another report</a> &nbsp; | &nbsp; <a href="/">Home</a></p>
+{% endif %}
+</div>
+
+{% if results and absence_review %}
+<div class="manager-packet">
+{% for department, employees in absence_review|groupby("department") %}
+<section class="manager-sheet">
+  <h1>Department Absence Verification</h1>
+  <p><b>Department:</b> {{ department }} &nbsp;&nbsp;&nbsp; <b>Date:</b> {{ report_date }}</p>
+  <p>UKG shows the employee(s) below as scheduled but absent. Review each employee, mark the correct reason, and attach the required documentation. Return this sheet to the Administrator.</p>
+  <table>
+    <tr><th>Employee</th><th>Scheduled Shift</th><th>Manager Verification</th></tr>
+    {% for r in employees %}
+    <tr>
+      <td>{{ r.name }}</td>
+      <td>{{ r.scheduled }}</td>
+      <td class="choice">
+        ☐ Absence — Absentee Report attached<br>
+        ☐ Approved Shift Swap — Shift Swap form attached<br>
+        ☐ Schedule Error — corrected in UKG<br>
+        ☐ Other: ______________________________
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="signature">
+    Department Head Signature: __________________________________ Date: _______________<br>
+    Administrator Review: _______________________________________ Date: _______________
+  </div>
+</section>
+{% endfor %}
+</div>
 {% endif %}
 </body>
 </html>
