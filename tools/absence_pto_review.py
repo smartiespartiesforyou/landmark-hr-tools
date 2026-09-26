@@ -59,13 +59,13 @@ def review_absence_pto(path):
     required = {
         "First Name", "Last Name", "Date", "Sch. Time In", "Sch. Time Out",
         "Actual Time In", "Actual Time Out", "Time Off Hours", "Time Off Name",
-        "Scheduled But Absent", "Employee Status", "Actual Jobs (HR) Full Path"
+        "Scheduled But Absent", "Actual Jobs (HR) Full Path"
     }
     missing = sorted(required.difference(data.columns))
     if missing:
         raise ValueError("This UKG report is missing: " + ", ".join(missing))
 
-    absence_review, fmla, time_off, partial_or_review = [], [], [], []
+    absence_review, time_off, partial_or_review = [], [], []
     report_dates = []
 
     for _, row in data.iterrows():
@@ -80,12 +80,10 @@ def review_absence_pto(path):
         scheduled_in, scheduled_out = _time(row.get("Sch. Time In")), _time(row.get("Sch. Time Out"))
         actual_in, actual_out = _time(row.get("Actual Time In")), _time(row.get("Actual Time Out"))
         off_hours, off_name = _hours(row.get("Time Off Hours")), _clean(row.get("Time Off Name"))
-        employee_status = _clean(row.get("Employee Status"))
         scheduled_absent = _yes(row.get("Scheduled But Absent"))
         has_any_punch = bool(actual_in or actual_out)
         has_complete_punches = bool(actual_in and actual_out)
         has_time_off = bool(off_name or off_hours)
-        is_fmla = "FMLA" in employee_status.upper()
 
         item = {
             "name": f"{first.title()} {last.title()}",
@@ -95,13 +93,9 @@ def review_absence_pto(path):
             "actual": f"{actual_in or '—'} – {actual_out or '—'}",
             "time_off_hours": off_hours,
             "time_off_name": off_name or "Time Off",
-            "employee_status": employee_status,
         }
 
-        if is_fmla and scheduled_absent:
-            item["status"] = "FMLA"
-            fmla.append(item)
-        elif has_time_off:
+        if has_time_off:
             if has_any_punch:
                 item["status"] = "Worked + Time Off"
                 partial_or_review.append(item)
@@ -117,4 +111,4 @@ def review_absence_pto(path):
 
     absence_review.sort(key=lambda item: (item["department"], item["name"]))
     report_date = min(report_dates) if report_dates else None
-    return report_date, absence_review, fmla, time_off, partial_or_review
+    return report_date, absence_review, time_off, partial_or_review
