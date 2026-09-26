@@ -18,22 +18,30 @@
 <h1>Daily Absence & PTO Review</h1>
 <p>Upload the customized UKG <b>Late / Early / Absent Report</b> Excel file.</p>
 {% if not results %}
-<div class="note">Required columns include scheduled and actual times plus <b>Time Off Hours</b> and <b>Time Off Name</b>.</div>
+<div class="note">Uses UKG's <b>Scheduled But Absent</b>, <b>Employee Status</b>, <b>Time Off Name</b>, and <b>Time Off Hours</b> fields.</div>
 <form method="POST" enctype="multipart/form-data">
   <input type="file" name="report_file" accept=".xlsx" required><br>
   <button type="submit">Review Absences & PTO</button>
 </form>
 {% else %}
 <p class="count">Report date: {{ report_date }}</p>
-<h2>Possible Absences ({{ possible_absences|length }})</h2>
-<p>Scheduled, no punches, and no recorded time off. Review in UKG before treating as an absence.</p>
+
+<h2>FMLA ({{ fmla|length }})</h2>
 <table><tr><th>Employee</th><th>Scheduled Shift</th><th>Status</th></tr>
-{% for r in possible_absences %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>{{ r.status }}</td></tr>{% else %}<tr><td colspan="3">None</td></tr>{% endfor %}
+{% for r in fmla %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>FMLA</td></tr>{% else %}<tr><td colspan="3">None</td></tr>{% endfor %}
 </table>
+
 <h2>PTO / Approved Time Off ({{ time_off|length }})</h2>
 <table><tr><th>Employee</th><th>Scheduled Shift</th><th>Type</th><th>Hours</th></tr>
 {% for r in time_off %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>{{ r.time_off_name }}</td><td>{{ "%.2f"|format(r.time_off_hours)|replace(".00","") }}</td></tr>{% else %}<tr><td colspan="4">None</td></tr>{% endfor %}
 </table>
+
+<h2>Absence Review ({{ absence_review|length }})</h2>
+<p>UKG marked these employees <b>Scheduled But Absent = Yes</b>, with no PTO/approved time off or FMLA identified by this report.</p>
+<table><tr><th>Employee</th><th>Scheduled Shift</th><th>Status</th></tr>
+{% for r in absence_review %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>{{ r.status }}</td></tr>{% else %}<tr><td colspan="3">None</td></tr>{% endfor %}
+</table>
+
 <h2>Worked + Time Off / Punch Review ({{ partial_or_review|length }})</h2>
 <table><tr><th>Employee</th><th>Scheduled Shift</th><th>Actual</th><th>Status</th><th>Time Off</th></tr>
 {% for r in partial_or_review %}<tr><td>{{ r.name }}</td><td>{{ r.scheduled }}</td><td>{{ r.actual }}</td><td>{{ r.status }}</td><td>{% if r.time_off_hours %}{{ r.time_off_name }} — {{ r.time_off_hours }} hrs{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5">None</td></tr>{% endfor %}
