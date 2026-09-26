@@ -126,13 +126,12 @@ def absence_pto_review():
     report_path = os.path.join(temp_folder, "late_early_absent.xlsx")
     try:
         report_file.save(report_path)
-        report_date, absence_review, fmla, time_off, partial_or_review = review_absence_pto(report_path)
+        report_date, absence_review, time_off, partial_or_review = review_absence_pto(report_path)
         return render_template(
             "absence_pto_review.html",
             results=True,
             report_date=report_date.strftime("%B %d, %Y") if report_date else "Unknown",
             absence_review=absence_review,
-            fmla=fmla,
             time_off=time_off,
             partial_or_review=partial_or_review,
         )
