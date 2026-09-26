@@ -20,6 +20,7 @@ from docx.shared import Inches, Pt, RGBColor
 from tools.lunch_review import extract_employee_page, hours_between
 from tools.attendance_review import build_daily_review
 from tools.attendance_pdf import create_attendance_pdf
+from tools.absence_pto_review import review_absence_pto
 from tools.ad347_data import build_ad347_record
 from tools.pdf_generator import create_ad347_pdf
 from tools.talent_lms import (
@@ -107,6 +108,37 @@ def attendance_review():
             <p>{error}</p>
             <p><a href='/attendance-review'>Try again</a></p>
         """, 400
+
+
+
+@app.route("/absence-pto-review", methods=["GET", "POST"])
+def absence_pto_review():
+    if request.method == "GET":
+        return render_template("absence_pto_review.html", results=False)
+
+    report_file = request.files.get("report_file")
+    if not report_file or not report_file.filename:
+        return render_template("absence_pto_review.html", results=False, error="Choose the UKG Excel report."), 400
+    if not report_file.filename.lower().endswith(".xlsx"):
+        return "<h2>Error</h2><p>The UKG report must be an .xlsx Excel file.</p><p><a href='/absence-pto-review'>Try again</a></p>", 400
+
+    temp_folder = tempfile.mkdtemp()
+    report_path = os.path.join(temp_folder, "late_early_absent.xlsx")
+    try:
+        report_file.save(report_path)
+        report_date, possible_absences, time_off, partial_or_review = review_absence_pto(report_path)
+        return render_template(
+            "absence_pto_review.html",
+            results=True,
+            report_date=report_date.strftime("%B %d, %Y") if report_date else "Unknown",
+            possible_absences=possible_absences,
+            time_off=time_off,
+            partial_or_review=partial_or_review,
+        )
+    except Exception as error:
+        return f"<h2>Could not review the report</h2><p>{error}</p><p><a href='/absence-pto-review'>Try again</a></p>", 400
+    finally:
+        shutil.rmtree(temp_folder, ignore_errors=True)
 
 
 @app.route("/")
