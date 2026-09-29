@@ -26,6 +26,21 @@ def _yes(value):
     return _clean(value).lower() in {"yes", "y", "true", "1"}
 
 
+def _is_prn(row):
+    """Return True when UKG identifies the employee/assignment as PRN."""
+    preferred_fields = (
+        "Employment Type", "Employee Type", "Job Type", "Status",
+        "Employee Status", "Full Time/Part Time", "FT/PT", "Pay Type",
+        "Actual Jobs (HR) Full Path"
+    )
+    for field in preferred_fields:
+        if field in row.index and "PRN" in _clean(row.get(field)).upper():
+            return True
+    # UKG exports vary by configuration. Fall back to checking the row so a
+    # PRN marker in a differently named employment-status column is still honored.
+    return any("PRN" in _clean(value).upper() for value in row.tolist())
+
+
 def _department(row):
     path = _clean(row.get("Actual Jobs (HR) Full Path"))
     upper = path.upper()
@@ -72,6 +87,8 @@ def review_absence_pto(path):
         first, last = _clean(row.get("First Name")), _clean(row.get("Last Name"))
         if not first or not last:
             continue
+        if _is_prn(row):
+            continue
         date = pd.to_datetime(row.get("Date"), errors="coerce")
         if pd.isna(date):
             continue
@@ -84,6 +101,10 @@ def review_absence_pto(path):
         has_any_punch = bool(actual_in or actual_out)
         has_complete_punches = bool(actual_in and actual_out)
         has_time_off = bool(off_name or off_hours)
+
+        # FMLA is managed separately and should not appear anywhere in this review.
+        if "FMLA" in off_name.upper():
+            continue
 
         item = {
             "name": f"{first.title()} {last.title()}",
