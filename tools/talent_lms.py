@@ -205,7 +205,6 @@ def filter_eligible(employees, scope, departments, jobs, eligibility_end=None):
             if not matches_group:
                 continue
         elif scope == "departments":
-            # Backward compatibility for older submitted forms.
             matches_cna = "CNA" in department_set and department == "NSG" and job == "CNA"
             matches_department = department in department_set
             if not (matches_cna or matches_department):
