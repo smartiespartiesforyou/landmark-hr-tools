@@ -44,27 +44,21 @@
         <label class="main">Who is required?</label>
         <div class="choice">
             <label><input type="radio" name="scope" value="all" checked> All current employees</label>
-            <label><input type="radio" name="scope" value="departments"> Only selected UKG departments</label>
-            <label><input type="radio" name="scope" value="jobs"> Only selected UKG job titles</label>
+            <label><input type="radio" name="scope" value="workgroups"> Only selected work groups</label>
         </div>
 
-        <div class="options" id="department_options">
-            {% for department in departments %}<label><input type="checkbox" name="departments" value="{{ department }}"> {{ department or 'No department' }}</label>{% endfor %}
-        </div>
-        <div class="options" id="job_options">
-            {% for job in jobs %}<label><input type="checkbox" name="jobs" value="{{ job }}"> {{ job }}</label>{% endfor %}
+        <div class="options" id="workgroup_options">
+            {% for value, label in workgroups %}<label><input type="checkbox" name="workgroups" value="{{ value }}"> {{ label }}</label>{% endfor %}
         </div>
 
         <button type="submit">Create Department Printouts</button>
     </form>
     <p><a href="/talent-lms">Upload different files</a></p>
     <script>
-        const departments = document.getElementById("department_options");
-        const jobs = document.getElementById("job_options");
+        const workgroups = document.getElementById("workgroup_options");
         function updateScope() {
             const scope = document.querySelector('input[name="scope"]:checked').value;
-            departments.style.display = scope === "departments" ? "block" : "none";
-            jobs.style.display = scope === "jobs" ? "block" : "none";
+            workgroups.style.display = scope === "workgroups" ? "block" : "none";
         }
         document.querySelectorAll('input[name="scope"]').forEach(input => input.addEventListener("change", updateScope));
         updateScope();
