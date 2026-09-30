@@ -98,6 +98,8 @@ def _department(name_key, location_4, location_5):
         return "Administrator"
     if location_4 == "NSG" and location_5 == "CNA":
         return "CNAs"
+    if location_4 == "NSG" and location_5 == "SUN":
+        return "Sunshine Aides"
     return {"DTY": "Dietary", "HSK": "Housekeeping", "LDY": "Laundry", "NSG": "Nursing"}.get(location_4, location_4 or "Department Not Listed")
 
 
