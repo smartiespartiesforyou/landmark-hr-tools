@@ -167,20 +167,52 @@ def is_completed(matrix_row, course_index):
 
 def filter_eligible(employees, scope, departments, jobs, eligibility_end=None):
     selected = []
+    workgroup_set = {str(value).strip().upper() for value in (departments or [])}
     department_set = {str(value).strip().upper() for value in (departments or [])}
     job_set = {str(value).strip().upper() for value in (jobs or [])}
+
+    department_groups = {
+        "ACTIVITIES": "ACT",
+        "ADMINISTRATION": "ADM",
+        "DIETARY": "DTY",
+        "HOUSEKEEPING": "HSK",
+        "LAUNDRY": "LDY",
+        "MAINTENANCE": "MTN",
+        "MEDICAL_RECORDS": "MRD",
+        "SOCIAL_SERVICES": "SSV",
+    }
+
     for employee in employees:
         department = employee["department"].strip().upper()
         job = employee["job"].strip().upper()
-        if scope == "departments":
-            # CNA is offered as a department-style print choice even though UKG
-            # stores CNA as the job under the NSG department.
+
+        if scope == "workgroups":
+            matches_group = any(
+                group in workgroup_set and department == code
+                for group, code in department_groups.items()
+            )
+            matches_group = matches_group or (
+                "CNA" in workgroup_set and department == "NSG" and job == "CNA"
+            )
+            matches_group = matches_group or (
+                "SUNSHINE" in workgroup_set and department == "NSG" and job == "SUN"
+            )
+            matches_group = matches_group or (
+                "NURSES" in workgroup_set
+                and department == "NSG"
+                and job not in {"CNA", "SUN"}
+            )
+            if not matches_group:
+                continue
+        elif scope == "departments":
+            # Backward compatibility for older submitted forms.
             matches_cna = "CNA" in department_set and department == "NSG" and job == "CNA"
             matches_department = department in department_set
             if not (matches_cna or matches_department):
                 continue
-        if scope == "jobs" and job not in job_set:
+        elif scope == "jobs" and job not in job_set:
             continue
+
         if eligibility_end and employee["effective_hire"] and employee["effective_hire"] > eligibility_end:
             continue
         selected.append(employee)
