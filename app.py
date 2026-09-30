@@ -555,6 +555,8 @@ def _talent_department(employee):
     job = employee["job"].strip().upper()
     if department == "NSG" and job == "CNA":
         return "CNAs"
+    if department == "NSG" and job == "SUN":
+        return "Sunshine Aides"
     if department == "NSG":
         return "Nursing"
     return employee["department"] or "No Department"
