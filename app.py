@@ -715,8 +715,19 @@ def talent_lms():
                 "talent_lms_select.html",
                 token=token,
                 courses=visible_courses,
-                departments=sorted({employee["department"] for employee in employees} | {"CNA"}),
-                jobs=sorted({employee["job"] for employee in employees if employee["job"]} | {"DTY", "MRD", "MTN", "ACT", "SSV"}),
+                workgroups=[
+                    ("ACTIVITIES", "Activities"),
+                    ("ADMINISTRATION", "Administration"),
+                    ("DIETARY", "Dietary"),
+                    ("HOUSEKEEPING", "Housekeeping"),
+                    ("LAUNDRY", "Laundry"),
+                    ("MAINTENANCE", "Maintenance"),
+                    ("MEDICAL_RECORDS", "Medical Records"),
+                    ("SOCIAL_SERVICES", "Social Services"),
+                    ("CNA", "CNA"),
+                    ("SUNSHINE", "Sunshine Aides"),
+                    ("NURSES", "Nurses"),
+                ],
                 employee_count=len(employees),
                 matrix_user_count=len(matrix_rows),
                 unique_count=len(unique),
@@ -732,14 +743,14 @@ def talent_lms():
         if not course:
             raise ValueError("Select an in-service course.")
         scope = request.form.get("scope", "all")
-        if scope not in {"all", "departments", "jobs"}:
+        if scope not in {"all", "workgroups"}:
             raise ValueError("Select who is required to complete this in-service.")
         eligibility_end = course_month_end(course["name"])
         eligible = filter_eligible(
             employees,
             scope,
-            request.form.getlist("departments"),
-            request.form.getlist("jobs"),
+            request.form.getlist("workgroups"),
+            [],
             eligibility_end,
         )
         if not eligible:
