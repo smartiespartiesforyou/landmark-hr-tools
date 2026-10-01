@@ -96,10 +96,15 @@ def _department(name_key, location_4, location_5):
     location_5 = _clean(location_5).upper()
     if name_key in ADMIN_EMPLOYEES:
         return "Administrator"
+
+    # UKG Sunshine Aides belong on their own attendance page.  Treat any
+    # NSG work-center/job value beginning with SUN as Sunshine so values such
+    # as "SUN", "SUNSHINE", or "SUNSHINE AIDE" cannot fall through to Nursing.
+    is_sunshine = location_4 == "NSG" and location_5.startswith("SUN")
+    if is_sunshine:
+        return "Sunshine Aides"
     if location_4 == "NSG" and location_5 == "CNA":
         return "CNAs"
-    if location_4 == "NSG" and location_5 == "SUN":
-        return "Sunshine Aides"
     return {"DTY": "Dietary", "HSK": "Housekeeping", "LDY": "Laundry", "NSG": "Nursing"}.get(location_4, location_4 or "Department Not Listed")
 
 
