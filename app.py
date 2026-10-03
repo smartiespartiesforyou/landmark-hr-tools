@@ -47,6 +47,7 @@ from tools.service_awards import (
     read_service_award_employees,
     service_award_review,
 )
+from tools.signature_checker import compare_signature_files, read_pdf_name_list
 
 
 app = Flask(__name__)
@@ -145,6 +146,44 @@ def absence_pto_review():
 @app.route("/")
 def home():
     return render_template("index.html")
+
+
+@app.route("/signature-checker", methods=["GET", "POST"])
+def signature_checker():
+    if request.method == "GET":
+        return render_template("signature_checker.html", results=False)
+
+    ukg_file = request.files.get("ukg_file")
+    pdf_list = request.files.get("pdf_list")
+    if not ukg_file or not ukg_file.filename:
+        return render_template("signature_checker.html", results=False, error="Choose the normal UKG Employee Information Excel report."), 400
+    if not pdf_list or not pdf_list.filename:
+        return render_template("signature_checker.html", results=False, error="Choose PDF-List.txt."), 400
+    if not ukg_file.filename.lower().endswith(".xlsx"):
+        return render_template("signature_checker.html", results=False, error="The UKG roster must be an .xlsx Excel file."), 400
+
+    temp_folder = tempfile.mkdtemp()
+    try:
+        ukg_path = os.path.join(temp_folder, "ukg.xlsx")
+        list_path = os.path.join(temp_folder, "PDF-List.txt")
+        ukg_file.save(ukg_path)
+        pdf_list.save(list_path)
+        employees = read_ukg_employees(ukg_path)
+        pdf_names = read_pdf_name_list(list_path)
+        found, missing, review, unmatched_files = compare_signature_files(employees, pdf_names)
+        return render_template(
+            "signature_checker.html",
+            results=True,
+            employee_count=len(employees),
+            found=found,
+            missing=missing,
+            review=review,
+            unmatched_files=unmatched_files,
+        )
+    except Exception as error:
+        return render_template("signature_checker.html", results=False, error=str(error)), 400
+    finally:
+        shutil.rmtree(temp_folder, ignore_errors=True)
 
 
 @app.route("/applicant-tracker")
