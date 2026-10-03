@@ -58,11 +58,9 @@
             <p><strong>Primary topic:</strong> {{ policy.primary_topic }}</p>
             <p>{{ policy.summary }}</p>
             <p><strong>Related form:</strong> {{ policy.related_form }}</p>
-            <div>
-                {% for tag in policy.tags %}
-                    <span class="tag">{{ tag }}</span>
-                {% endfor %}
-            </div>
+            {% if query %}
+                <p class="muted"><strong>Why this matched:</strong> {{ query }}</p>
+            {% endif %}
         </div>
     {% else %}
         <p class="empty">No indexed policy matched that search yet.</p>
