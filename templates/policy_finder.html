@@ -1,38 +1,22 @@
 <!DOCTYPE html>
-<html><head><title>Policy Assistant - Landmark HR Tools</title><meta name="viewport" content="width=device-width, initial-scale=1">
+<html><head><title>Policy Finder - Landmark HR Tools</title><meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:Arial,sans-serif;max-width:950px;margin:35px auto;padding:0 18px;color:#222}h1{margin-bottom:4px}.notice{background:#fff7d6;border:1px solid #e5cf73;padding:12px 14px;border-radius:8px;margin:18px 0}.ask{display:flex;gap:8px;margin:20px 0 8px}input{flex:1;padding:13px;font-size:16px}button{padding:12px 18px;cursor:pointer}.topics button{margin:0 6px 8px 0;padding:7px 11px}.card,.answer{border:1px solid #ccc;border-radius:10px;padding:16px;margin:14px 0}.answer{border-width:2px}.muted{color:#666;font-size:14px}.source{background:#f5f5f5;padding:12px;border-radius:8px;margin-top:12px}.empty{margin-top:24px;font-weight:bold}a{color:#0645ad}.label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#666;font-weight:bold}
 </style></head><body>
 <p><a href="/">← Landmark HR Tools</a></p>
-<h1>Policy Assistant</h1>
-<p>Ask a question in ordinary language. Answers are limited to policy information indexed from the Personnel LA manual.</p>
-<div class="notice"><strong>Reference aid.</strong> For the complete language and current approved version, use the DocTract search term shown with the answer.</div>
+<h1>Policy Finder</h1>
+<p>Type a topic or question in ordinary language. This tool finds the most relevant indexed Landmark policy; it does not interpret policy or make HR decisions.</p>
+<div class="notice"><strong>Policy locator only.</strong> Read the current approved policy in DocTract before making a decision. If the policy does not clearly address the situation, do not assume an answer.</div>
 
 <form method="POST" class="ask">
-<input name="q" value="{{ query }}" placeholder="Ask: Can an employee use PTO before 90 days?" autofocus>
-<button type="submit" name="mode" value="ask">Ask</button>
+<input name="q" value="{{ query }}" placeholder="Search: PTO sharing, employee relatives, drug testing..." autofocus>
+<button type="submit">Find Policy</button>
 </form>
 <div class="topics"><span class="muted">Try:</span>
 {% for topic in quick_topics %}<button type="button" onclick="window.location='?q={{ topic }}'">{{ topic }}</button>{% endfor %}
 <button type="button" onclick="window.location='/policy-finder'">Browse all</button></div>
 
-{% if answer %}
-<div class="answer">
-<div class="label">{% if answer.supported %}Policy answer{% else %}Needs DocTract check{% endif %}</div>
-<p style="font-size:18px">{{ answer.answer }}</p>
-{% if answer.policy %}
-<div class="source">
-<strong>Policy:</strong> {{ answer.policy.title }}<br>
-<strong>DocTract search:</strong> <code>{{ answer.policy.doctract }}</code><br>
-{% if answer.policy.revision %}<strong>Indexed revision:</strong> {{ answer.policy.revision }}<br>{% endif %}
-{% if answer.policy.related_form %}<strong>Related form:</strong> {{ answer.policy.related_form }}{% endif %}
-</div>
-{% endif %}
-</div>
-{% endif %}
-
-{% if not answer %}
-{% if query %}<p><strong>{{ results|length }}</strong> related result{% if results|length != 1 %}s{% endif %} for “{{ query }}”</p>
+{% if query %}<p><strong>{{ results|length }}</strong> related policy result{% if results|length != 1 %}s{% endif %} for “{{ query }}”</p><p class="muted">These are possible matches. Use the DocTract search term below to read the current approved policy.</p>
 {% else %}<p><strong>{{ indexed_count }}</strong> policies indexed in this first build.</p>{% endif %}
 {% for policy in results %}
 <div class="card"><h2>{{ policy.title }}</h2>
@@ -41,6 +25,4 @@ body{font-family:Arial,sans-serif;max-width:950px;margin:35px auto;padding:0 18p
 <p><strong>DocTract search:</strong> <code>{{ policy.doctract }}</code></p>
 {% if policy.related_form %}<p><strong>Related form:</strong> {{ policy.related_form }}</p>{% endif %}
 </div>
-{% else %}<p class="empty">No indexed policy matched that search yet. Check DocTract.</p>{% endfor %}
-{% endif %}
-</body></html>
+{% else %}<p class="empty">No indexed policy matched that search yet. Check DocTract.</p>{% endfor %}</body></html>
