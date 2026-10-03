@@ -41,7 +41,7 @@ from tools.birthday_anniversary import (
     read_birthdays_and_anniversaries,
 )
 from tools.weekend_cna_differential import calculate_weekend_cna_differential
-from tools.policy_data import POLICY_INDEX, policy_search, policy_answer
+from tools.policy_data import POLICY_INDEX, policy_search
 from tools.service_awards import (
     parse_milestones,
     read_service_award_employees,
@@ -972,13 +972,9 @@ def service_awards():
 @app.route("/policy-finder", methods=["GET", "POST"])
 def policy_finder():
     query = (request.form.get("q") if request.method == "POST" else request.args.get("q", "")).strip()
-    mode = request.form.get("mode", "ask") if request.method == "POST" else "search"
+    # Policy Finder locates relevant policies; it does not interpret them.
     answer = None
-    if query and mode == "ask":
-        answer = policy_answer(query)
-        results = [answer["policy"]] if answer.get("policy") else []
-    else:
-        results = policy_search(query)
+    results = policy_search(query)
 
     return render_template(
         "policy_finder.html",
