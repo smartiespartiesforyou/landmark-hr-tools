@@ -19,6 +19,13 @@ def employee_file_key(employee):
     return _normalize(f"{first[0]} {last}")
 
 
+def _employee_key_from_filename(basename):
+    match = re.match(r"^\s*([A-Za-z])\s*[.\-_ ]+\s*([A-Za-z][A-Za-z'\-]*)\b", basename)
+    if not match:
+        return ""
+    return _normalize(f"{match.group(1)} {match.group(2)}")
+
+
 def read_pdf_name_list(path):
     names = []
     with open(path, "r", encoding="utf-8-sig", errors="replace") as handle:
@@ -29,11 +36,11 @@ def read_pdf_name_list(path):
             basename = os.path.basename(filename)
             if basename.casefold().endswith(".pdf"):
                 basename = basename[:-4]
-            key = _normalize(basename)
+            key = _employee_key_from_filename(basename)
             if key:
                 names.append({"filename": raw_line.strip(), "base": basename, "key": key})
     if not names:
-        raise ValueError("No PDF names were found in PDF-List.txt. Run: dir /b *.pdf > PDF-List.txt")
+        raise ValueError("No employee PDF names were found. Employee files should begin like A. Priest.pdf or A. Priest Corporate Compliance 2026.pdf.")
     return names
 
 
@@ -52,13 +59,11 @@ def compare_signature_files(employees, pdf_names):
     found = []
     missing = []
     review = []
-    used_file_keys = set()
 
     for key, employee_group in employees_by_key.items():
         file_group = files_by_key.get(key, [])
         if len(employee_group) == 1 and len(file_group) == 1:
             found.append({"employee": employee_group[0], "file": file_group[0]["filename"]})
-            used_file_keys.add(key)
         elif not file_group:
             if len(employee_group) == 1:
                 missing.append(employee_group[0])
@@ -72,11 +77,10 @@ def compare_signature_files(employees, pdf_names):
         else:
             review.append({
                 "key": key,
-                "reason": "This initial + last name is not unique, so HR must verify the correct employee/file.",
+                "reason": "This initial + last name is not unique, or more than one PDF uses it, so HR must verify the correct employee/file.",
                 "employees": employee_group,
                 "files": [item["filename"] for item in file_group],
             })
-            used_file_keys.add(key)
 
     unmatched_files = []
     for key, file_group in files_by_key.items():
