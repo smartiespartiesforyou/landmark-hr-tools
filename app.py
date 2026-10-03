@@ -966,5 +966,58 @@ def service_awards():
         shutil.rmtree(temp_folder, ignore_errors=True)
 
 
+
+POLICY_INDEX = [
+    {
+        "title": "[K] Paid Time Off (PTO)",
+        "manual": "Personnel LA & MS",
+        "section": "III - Employee Benefit Programs",
+        "revision": "09/23",
+        "primary_topic": "PTO",
+        "related_form": "AD-366 - Paid Time Off (PTO) Request",
+        "summary": (
+            "Covers PTO eligibility, accrual, use and scheduling, required increments, "
+            "unscheduled absences, FMLA interaction, rollover, and unused PTO at separation."
+        ),
+        "tags": [
+            "PTO", "vacation", "sick time", "full-time", "90-day probation",
+            "accrual", "anniversary", "PTO eligibility date", "half-day",
+            "full-day", "4-hour increments", "3.75-hour increments",
+            "30-day notice", "AD-366", "supervisor approval", "staffing",
+            "unscheduled absence", "health care provider", "overtime", "FMLA",
+            "rollover", "termination", "resignation", "forfeiture",
+        ],
+    },
+]
+
+
+@app.route("/policy-finder")
+def policy_finder():
+    query = request.args.get("q", "").strip()
+    results = POLICY_INDEX
+    if query:
+        needle = query.casefold()
+        results = []
+        for policy in POLICY_INDEX:
+            searchable = " ".join([
+                policy["title"],
+                policy["manual"],
+                policy["section"],
+                policy["primary_topic"],
+                policy["related_form"],
+                policy["summary"],
+                *policy["tags"],
+            ]).casefold()
+            if needle in searchable:
+                results.append(policy)
+
+    return render_template(
+        "policy_finder.html",
+        query=query,
+        results=results,
+        quick_topics=["PTO", "FMLA", "termination", "overtime", "anniversary"],
+    )
+
+
 if __name__ == "__main__":
     app.run(debug=True)
