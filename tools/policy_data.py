@@ -6,6 +6,7 @@ POLICY_INDEX = [
     "tags":["pto","vacation","sick time","90 days","probation","accrual","anniversary","time off","AD-366","overtime","fmla","rollover","termination","resignation","forfeiture"],
     "facts":[
       ["use PTO before 90 days","Employees can begin using PTO after completion of the 90-day probationary period."],
+      ["borrow PTO advance leave negative PTO","Employees may not borrow against their PTO banks; no advance leave will be granted."],
       ["pto overtime","PTO is paid at the employee's straight-time rate and is not part of overtime calculation."],
       ["pto rollover","Unused PTO up to 1 week rolls over at the employee's anniversary year end; unused PTO above 1 week is forfeited."],
       ["pto termination","Unused PTO is forfeited upon resignation or termination unless otherwise required by law."],
@@ -107,15 +108,27 @@ def policy_search(query):
 
 def policy_answer(question):
     q=(question or "").strip().casefold()
-    best=None
+    # Score the policy topic and the specific rule separately. A policy-name match
+    # alone must never choose an unrelated fact from that policy.
+    candidates=[]
+    stop={"can","could","does","do","is","are","an","a","the","employee","employees","before","after","with","from","for","their","they"}
+    q_words={w.strip("?!.,'\"()") for w in q.split()}
+    q_words={w for w in q_words if len(w)>2 and w not in stop}
     for policy in POLICY_INDEX:
+        policy_hay=" ".join([policy["title"],policy["doctract"],policy["summary"],*policy["tags"]]).casefold()
+        policy_words=sum(1 for w in q_words if w in policy_hay)
         for cue,answer in policy.get("facts",[]):
-            cue_words=[w for w in cue.casefold().split() if len(w)>2]
-            score=sum(1 for w in cue_words if w in q)
-            if score and (best is None or score>best[0]):
-                best=(score,policy,answer)
-    if best:
-        _,policy,answer=best
-        return {"answer":answer,"policy":policy,"supported":True}
+            cue_tokens={w for w in cue.casefold().split() if len(w)>2 and w not in stop}
+            intent_hits=len(q_words.intersection(cue_tokens))
+            if intent_hits:
+                # Intent words dominate; policy/topic overlap is only a tie-breaker.
+                candidates.append((intent_hits*10+policy_words, intent_hits, policy, answer))
+    if candidates:
+        candidates.sort(key=lambda item:(item[0],item[1]), reverse=True)
+        top=candidates[0]
+        # If two different facts tie on intent, do not guess.
+        ties=[item for item in candidates if item[0]==top[0] and item[1]==top[1] and item[3]!=top[3]]
+        if not ties:
+            return {"answer":top[3],"policy":top[2],"supported":True}
     matches=policy_search(question)
     return {"answer":"I found related policy material, but the indexed facts do not support a reliable direct answer yet. Check the policy in DocTract using the search term below.","policy":matches[0] if matches else None,"supported":False}
