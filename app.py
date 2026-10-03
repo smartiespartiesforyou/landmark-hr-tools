@@ -171,6 +171,38 @@ def signature_checker():
         employees = read_ukg_employees(ukg_path)
         pdf_names = read_pdf_name_list(list_path)
         found, missing, review, unmatched_files = compare_signature_files(employees, pdf_names)
+
+        if request.form.get("action") == "excel":
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Missing Employees"
+            headers = ["Employee", "Department", "Job", "Expected PDF Name"]
+            sheet.append(headers)
+            for cell in sheet[1]:
+                cell.font = Font(bold=True)
+            for employee in missing:
+                expected = f"{employee['first'][0].upper()}. {employee['last'].title()} CORPORATE COMPLIANCE 2026.pdf"
+                sheet.append([
+                    employee["display_name"],
+                    employee["department"],
+                    employee["job"],
+                    expected,
+                ])
+            sheet.freeze_panes = "A2"
+            sheet.auto_filter.ref = sheet.dimensions
+            sheet.column_dimensions["A"].width = 28
+            sheet.column_dimensions["B"].width = 18
+            sheet.column_dimensions["C"].width = 20
+            sheet.column_dimensions["D"].width = 48
+            output_path = os.path.join(temp_folder, "Missing_Corporate_Compliance_2026.xlsx")
+            workbook.save(output_path)
+            return send_file(
+                output_path,
+                as_attachment=True,
+                download_name="Missing_Corporate_Compliance_2026.xlsx",
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
         return render_template(
             "signature_checker.html",
             results=True,
