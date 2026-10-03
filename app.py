@@ -41,6 +41,7 @@ from tools.birthday_anniversary import (
     read_birthdays_and_anniversaries,
 )
 from tools.weekend_cna_differential import calculate_weekend_cna_differential
+from tools.policy_data import POLICY_INDEX, policy_search, policy_answer
 from tools.service_awards import (
     parse_milestones,
     read_service_award_employees,
@@ -967,55 +968,25 @@ def service_awards():
 
 
 
-POLICY_INDEX = [
-    {
-        "title": "[K] Paid Time Off (PTO)",
-        "manual": "Personnel LA & MS",
-        "section": "III - Employee Benefit Programs",
-        "revision": "09/23",
-        "primary_topic": "PTO",
-        "related_form": "AD-366 - Paid Time Off (PTO) Request",
-        "summary": (
-            "Covers PTO eligibility, accrual, use and scheduling, required increments, "
-            "unscheduled absences, FMLA interaction, rollover, and unused PTO at separation."
-        ),
-        "tags": [
-            "PTO", "vacation", "sick time", "full-time", "90-day probation",
-            "accrual", "anniversary", "PTO eligibility date", "half-day",
-            "full-day", "4-hour increments", "3.75-hour increments",
-            "30-day notice", "AD-366", "supervisor approval", "staffing",
-            "unscheduled absence", "health care provider", "overtime", "FMLA",
-            "rollover", "termination", "resignation", "forfeiture",
-        ],
-    },
-]
 
-
-@app.route("/policy-finder")
+@app.route("/policy-finder", methods=["GET", "POST"])
 def policy_finder():
-    query = request.args.get("q", "").strip()
-    results = POLICY_INDEX
-    if query:
-        needle = query.casefold()
-        results = []
-        for policy in POLICY_INDEX:
-            searchable = " ".join([
-                policy["title"],
-                policy["manual"],
-                policy["section"],
-                policy["primary_topic"],
-                policy["related_form"],
-                policy["summary"],
-                *policy["tags"],
-            ]).casefold()
-            if needle in searchable:
-                results.append(policy)
+    query = (request.form.get("q") if request.method == "POST" else request.args.get("q", "")).strip()
+    mode = request.form.get("mode", "ask") if request.method == "POST" else "search"
+    answer = None
+    if query and mode == "ask":
+        answer = policy_answer(query)
+        results = [answer["policy"]] if answer.get("policy") else []
+    else:
+        results = policy_search(query)
 
     return render_template(
         "policy_finder.html",
         query=query,
         results=results,
-        quick_topics=["PTO", "FMLA", "termination", "overtime", "anniversary"],
+        answer=answer,
+        indexed_count=len(POLICY_INDEX),
+        quick_topics=["PTO", "termination", "sign-on bonus", "drug testing", "relatives"],
     )
 
 
