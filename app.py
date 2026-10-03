@@ -16,6 +16,8 @@ import pdfplumber
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
+from openpyxl import Workbook
+from openpyxl.styles import Font
 
 from tools.lunch_review import extract_employee_page, hours_between
 from tools.attendance_review import build_daily_review
