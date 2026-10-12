@@ -60,7 +60,7 @@ def calculate_weekend_cna_differential(xlsx_path, rate=WEEKEND_RATE):
             "Use the Calculated Hours By Work Day report that includes First Name, Last Name, Date, and Total Work Hours."
         )
 
-    required = ["First Name", "Last Name", "Date", "Total Work Hours"]
+    required = ["First Name", "Last Name", "Date", "Total Work Hours", "Location(5)"]
     missing = [column for column in required if column not in headers]
     if missing:
         raise ValueError("The report is missing required column(s): " + ", ".join(missing))
@@ -77,7 +77,7 @@ def calculate_weekend_cna_differential(xlsx_path, rate=WEEKEND_RATE):
 
         if "Location(5)" in headers and headers["Location(5)"] < len(row):
             location5 = _normalize(row[headers["Location(5)"]]).upper()
-            if location5 and location5 != "CNA":
+            if location5 != "CNA":
                 skipped_non_cna += 1
                 continue
 
@@ -133,4 +133,49 @@ def calculate_weekend_cna_differential(xlsx_path, rate=WEEKEND_RATE):
         "employee_count": len(results),
         "skipped_non_cna": skipped_non_cna,
         "skipped_non_weekend": skipped_non_weekend,
+    }
+
+
+def calculate_two_weekends(first_path, second_path):
+    """Combine two separately exported weekends into one payroll summary."""
+    from decimal import Decimal
+    first = calculate_weekend_cna_differential(first_path)
+    second = calculate_weekend_cna_differential(second_path)
+    first_dates = {day for item in first["results"] for day in item["dates"]}
+    second_dates = {day for item in second["results"] for day in item["dates"]}
+    if first_dates & second_dates:
+        raise ValueError("The two reports overlap in worked dates. Upload each weekend once.")
+    merged = {}
+    for index, summary in enumerate((first, second), start=1):
+        for item in summary["results"]:
+            key = item["employee_id"] or item["name"].upper()
+            if key not in merged:
+                merged[key] = {
+                    "employee_id": item["employee_id"],
+                    "name": item["name"],
+                    "weekend_1_hours": Decimal("0.00"),
+                    "weekend_2_hours": Decimal("0.00"),
+                }
+            merged[key][f"weekend_{index}_hours"] += Decimal(str(item["hours"]))
+
+    results = []
+    for item in merged.values():
+        hours1 = item["weekend_1_hours"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        hours2 = item["weekend_2_hours"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        results.append({
+            "employee_id": item["employee_id"],
+            "name": item["name"],
+            "weekend_1_hours": float(hours1),
+            "weekend_1_pay": float((hours1 * WEEKEND_RATE).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "weekend_2_hours": float(hours2),
+            "weekend_2_pay": float((hours2 * WEEKEND_RATE).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+        })
+
+    # Payroll lists are alphabetical by surname, then given name.
+    results.sort(key=lambda item: (item["name"].rsplit(" ", 1)[-1].casefold(), item["name"].casefold()))
+    return {
+        "rate": float(WEEKEND_RATE),
+        "results": results,
+        "weekend_1_dates": sorted(first_dates),
+        "weekend_2_dates": sorted(second_dates),
     }
