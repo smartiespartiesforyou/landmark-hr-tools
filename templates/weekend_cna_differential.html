@@ -101,53 +101,43 @@
 <body>
 <div class="wrap">
     <h1>Weekend CNA Differential</h1>
-    <p class="sub">Upload the UKG <b>Calculated Hours By Work Day</b> report. The tool totals actual CNA work hours on Saturday and Sunday and calculates the <b>$4.00/hour</b> weekend differential.</p>
+    <p class="sub">Export Report 4 from UKG in Excel 2007 format for the first Saturday and Sunday of the payroll period, then export Report 4 again for the following Saturday and Sunday. Save each export separately using its Saturday and Sunday dates. The tool keeps both weekends separate for UKG Manual Pay and calculates the <b>$4.00/hour</b> weekend differential.</p>
 
     {% if error %}
         <div class="error">{{ error }}</div>
     {% endif %}
 
     <form class="upload-box" method="post" enctype="multipart/form-data">
-        <label for="report_file"><b>UKG Weekend Workers Payroll Excel Report</b></label><br>
-        <input id="report_file" name="report_file" type="file" accept=".xlsx,.xlsm" required>
+        <label for="weekend_1"><b>Upload Report 4 — First Saturday & Sunday</b></label><br>
+        <input id="weekend_1" name="weekend_1" type="file" accept=".xlsx" required>
+        <label for="weekend_2"><b>Upload Report 4 — Second Saturday & Sunday</b></label><br>
+        <input id="weekend_2" name="weekend_2" type="file" accept=".xlsx" required>
         <button type="submit">Calculate Weekend Pay</button>
     </form>
 
     {% if summary %}
-        <p><b>Report:</b> {{ filename }}</p>
-        <div class="cards">
-            <div class="card"><div class="label">CNAs Worked</div><div class="value">{{ summary.employee_count }}</div></div>
-            <div class="card"><div class="label">Weekend Hours</div><div class="value">{{ "%.2f"|format(summary.total_hours) }}</div></div>
-            <div class="card"><div class="label">Total Differential Owed</div><div class="value">${{ "%.2f"|format(summary.total_owed) }}</div></div>
-        </div>
-
+        <p><b>Payroll Manual Pay entries:</b> each weekend is calculated separately at $4.00 per CNA work hour.</p>
         <table>
             <thead>
                 <tr>
-                    <th>Employee</th>
-                    <th class="num">Weekend Hours</th>
-                    <th class="num">Rate</th>
-                    <th class="num">Amount Owed</th>
+                    <th>Employee (alphabetical by last name)</th>
+                    <th class="num">Weekend 1 Hours</th>
+                    <th class="num">Weekend 1 Manual Pay</th>
+                    <th class="num">Weekend 2 Hours</th>
+                    <th class="num">Weekend 2 Manual Pay</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in summary.results %}
                 <tr>
                     <td>{{ row.name }}</td>
-                    <td class="num">{{ "%.2f"|format(row.hours) }}</td>
-                    <td class="num">${{ "%.2f"|format(summary.rate) }}</td>
-                    <td class="num"><b>${{ "%.2f"|format(row.owed) }}</b></td>
+                    <td class="num">{{ "%.2f"|format(row.weekend_1_hours) }}</td>
+                    <td class="num"><b>${{ "%.2f"|format(row.weekend_1_pay) }}</b></td>
+                    <td class="num">{{ "%.2f"|format(row.weekend_2_hours) }}</td>
+                    <td class="num"><b>${{ "%.2f"|format(row.weekend_2_pay) }}</b></td>
                 </tr>
                 {% endfor %}
             </tbody>
-            <tfoot>
-                <tr>
-                    <td>TOTAL</td>
-                    <td class="num">{{ "%.2f"|format(summary.total_hours) }}</td>
-                    <td></td>
-                    <td class="num">${{ "%.2f"|format(summary.total_owed) }}</td>
-                </tr>
-            </tfoot>
         </table>
 
         <p class="note">Only numeric <b>Total Work Hours</b> are paid. PTO/excused-absence hours are not included. Rows dated outside Saturday or Sunday are ignored automatically.</p>
