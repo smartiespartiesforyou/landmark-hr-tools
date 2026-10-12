@@ -42,7 +42,7 @@ from tools.birthday_anniversary import (
     create_birthday_anniversary_pdf,
     read_birthdays_and_anniversaries,
 )
-from tools.weekend_cna_differential import calculate_weekend_cna_differential
+from tools.weekend_cna_differential import calculate_two_weekends
 from tools.policy_data import POLICY_INDEX, policy_search
 from tools.service_awards import (
     parse_milestones,
@@ -232,32 +232,42 @@ def sunshine_aide_tracker():
 @app.route("/weekend-cna-differential", methods=["GET", "POST"])
 def weekend_cna_differential():
     if request.method == "GET":
-        return render_template("weekend_cna_differential.html")
+        return render_template("weekend_cna_differential.html", summary=None)
 
-    report_file = request.files.get("report_file")
-    if not report_file or not report_file.filename:
+    first = request.files.get("weekend_1")
+    second = request.files.get("weekend_2")
+    if not first or not second or not first.filename or not second.filename or not all(
+        f.filename.lower().endswith(".xlsx") for f in (first, second)
+    ):
         return render_template(
             "weekend_cna_differential.html",
-            error="Choose the UKG Calculated Hours By Work Day Excel report first.",
+            error="Upload both weekend UKG Excel 2007 reports.",
+            summary=None,
         ), 400
-
-    temp_folder = tempfile.mkdtemp()
-    report_path = os.path.join(temp_folder, "weekend_workers.xlsx")
-    report_file.save(report_path)
 
     try:
-        summary = calculate_weekend_cna_differential(report_path)
+        with tempfile.TemporaryDirectory() as folder:
+            path1 = os.path.join(folder, "weekend_1.xlsx")
+            path2 = os.path.join(folder, "weekend_2.xlsx")
+            first.save(path1)
+            second.save(path2)
+            summary = calculate_two_weekends(path1, path2)
+        response = app.make_response(render_template(
+            "weekend_cna_differential.html", summary=summary
+        ))
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except ValueError as error:
         return render_template(
-            "weekend_cna_differential.html",
-            summary=summary,
-            filename=report_file.filename,
-        )
-    except Exception as error:
-        return render_template(
-            "weekend_cna_differential.html",
-            error=str(error),
+            "weekend_cna_differential.html", error=str(error), summary=None
         ), 400
-
+    except Exception:
+        app.logger.exception("Weekend differential calculation failed")
+        return render_template(
+            "weekend_cna_differential.html",
+            error="Could not process the two UKG Excel 2007 reports.",
+            summary=None,
+        ), 400
 
 
 def review_timesheets(pdf_path):
