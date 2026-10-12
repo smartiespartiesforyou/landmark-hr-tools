@@ -121,9 +121,7 @@
             <thead>
                 <tr>
                     <th>Employee (alphabetical by last name)</th>
-                    <th class="num">Weekend 1 Hours</th>
                     <th class="num">Weekend 1 Manual Pay</th>
-                    <th class="num">Weekend 2 Hours</th>
                     <th class="num">Weekend 2 Manual Pay</th>
                 </tr>
             </thead>
@@ -131,9 +129,7 @@
                 {% for row in summary.results %}
                 <tr>
                     <td>{{ row.name }}</td>
-                    <td class="num">{{ "%.2f"|format(row.weekend_1_hours) }}</td>
                     <td class="num"><b>${{ "%.2f"|format(row.weekend_1_pay) }}</b></td>
-                    <td class="num">{{ "%.2f"|format(row.weekend_2_hours) }}</td>
                     <td class="num"><b>${{ "%.2f"|format(row.weekend_2_pay) }}</b></td>
                 </tr>
                 {% endfor %}
