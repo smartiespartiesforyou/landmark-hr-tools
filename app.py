@@ -220,6 +220,10 @@ def signature_checker():
         shutil.rmtree(temp_folder, ignore_errors=True)
 
 
+@app.route("/applicant-tracker-fingerprint")
+def applicant_tracker_fingerprint():
+    return render_template("applicant_tracker_fingerprint.html")
+
 @app.route("/applicant-tracker")
 def applicant_tracker():
     return render_template("applicant_tracker.html")
