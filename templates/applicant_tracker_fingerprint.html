@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fingerprint Applicant Tracker | Landmark HR Tools</title>
+    <style>
+        :root { --navy:#17324d; --blue:#246b9c; --pale:#eef5f9; --line:#c8d4dc; --red:#a52a2a; --green:#26734d; }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:Arial, sans-serif; color:#1f2933; background:#f4f6f8; }
+        header { background:var(--navy); color:white; padding:18px 24px; }
+        header h1 { margin:0 0 5px; font-size:28px; }
+        header a { color:white; }
+        main { max-width:1400px; margin:auto; padding:20px; }
+        .toolbar, .card { background:white; border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+        .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        button, .button { border:0; border-radius:6px; padding:10px 14px; font-weight:bold; cursor:pointer; background:var(--blue); color:white; font-size:15px; }
+        button.secondary { background:#5d6b78; }
+        button.light { background:#e8eef2; color:#1f2933; }
+        button.danger { background:var(--red); }
+        input, select, textarea { width:100%; padding:9px; border:1px solid #9eacb6; border-radius:5px; font-size:15px; background:white; }
+        textarea { min-height:70px; resize:vertical; }
+        label { display:block; font-weight:bold; margin-bottom:5px; }
+        .grid { display:grid; grid-template-columns:repeat(4, minmax(160px, 1fr)); gap:14px; }
+        .span-2 { grid-column:span 2; }
+        .section-title { grid-column:1/-1; margin:12px 0 0; padding-bottom:6px; border-bottom:2px solid var(--pale); color:var(--navy); }
+        .hint { font-size:13px; color:#5c6973; margin-top:4px; }
+        .notice { padding:10px 12px; background:#fff7da; border-left:4px solid #d9a400; margin-bottom:15px; }
+        .status { display:inline-block; padding:5px 9px; border-radius:20px; background:var(--pale); font-weight:bold; white-space:nowrap; }
+        .status.attention { background:#fff0d5; color:#7a4b00; }
+        .status.done { background:#dff3e8; color:#175c39; }
+        .status.closed { background:#eceff1; color:#4b5560; }
+        .filters { display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:10px; align-items:end; }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; background:white; }
+        th { background:var(--navy); color:white; text-align:left; }
+        th, td { padding:11px 9px; border:1px solid var(--line); vertical-align:top; }
+        tr:hover td { background:#f7fafc; }
+        .actions { display:flex; flex-wrap:wrap; gap:6px; }
+        .actions button { padding:7px 9px; font-size:13px; }
+        dialog { width:min(1100px, 96vw); max-height:92vh; border:0; border-radius:10px; padding:0; box-shadow:0 18px 60px #0007; }
+        dialog::backdrop { background:#0008; }
+        .dialog-head { position:sticky; top:0; z-index:2; background:var(--navy); color:white; display:flex; justify-content:space-between; align-items:center; padding:14px 18px; }
+        .dialog-head h2 { margin:0; }
+        .dialog-body { padding:18px; overflow:auto; }
+        .dialog-foot { position:sticky; bottom:0; background:white; border-top:1px solid var(--line); padding:14px 18px; display:flex; justify-content:flex-end; gap:8px; }
+        .email-box { white-space:pre-wrap; background:#f7f9fa; padding:14px; border:1px solid var(--line); border-radius:6px; min-height:180px; }
+        #printArea { display:none; }
+        @media (max-width:850px) { .grid { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } }
+        @media print {
+            body > header, body > main, body > dialog { display:none !important; }
+            #printArea { display:block !important; position:static; padding:0; color:black; }
+            #printArea h1 { font-size:20pt; margin:0 0 6px; }
+            #printArea .print-date { font-size:11pt; margin-bottom:10px; }
+            #printArea table { font-size:11pt; width:100%; page-break-inside:auto; }
+            #printArea thead { display:table-header-group; }
+            #printArea tr { page-break-inside:avoid; page-break-after:auto; }
+            #printArea th { background:#ddd !important; color:black; }
+            #printArea th, #printArea td { border:1px solid #555; padding:7px; }
+            #printArea .staffing-needs { margin-top:14px; border:1px solid #555; padding:10px 12px; page-break-inside:avoid; font-size:11pt; }
+            #printArea .staffing-needs h2 { font-size:14pt; margin:0 0 8px; }
+            #printArea .staffing-line { margin:9px 0; }
+            #printArea .blank-line { display:inline-block; min-width:420px; border-bottom:1px solid #222; height:15px; vertical-align:bottom; }
+            @page { size:landscape; margin:0.35in; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Applicant Tracker — Fingerprints</h1>
+    <div><a href="/">Landmark HR Tools</a> &rsaquo; Private HR working tracker</div>
+</header>
+
+<main>
+    <div class="notice"><strong>Saved on this computer:</strong> Use <strong>Export Backup</strong> regularly. Do not record Social Security numbers, birthdates, or conviction details here.</div>
+
+    <div class="toolbar">
+        <button id="newBtn">+ New Applicant</button>
+        <button class="secondary" id="printBtn">Print Supervisor Update</button>
+        <button class="light" id="exportBtn">Export Backup</button>
+        <label class="button light" style="display:inline-block;margin:0">Import Backup<input id="importFile" type="file" accept="application/json" hidden></label>
+        <span id="saveMessage" class="hint" aria-live="polite"></span>
+    </div>
+
+    <div class="card filters">
+        <div><label for="search">Search</label><input id="search" placeholder="Name, position, shift, email"></div>
+        <div><label for="stageFilter">Stage</label><select id="stageFilter"><option value="">All stages</option></select></div>
+        <div><label for="positionFilter">Position</label><select id="positionFilter"><option value="">All positions</option></select></div>
+        <button class="light" id="clearFilters">Clear</button>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Applicant</th><th>Position / Shift</th><th>Current Stage</th><th>Next Step</th><th>Updated</th><th>Actions</th></tr></thead>
+            <tbody id="applicantRows"></tbody>
+        </table>
+    </div>
+</main>
+
+<dialog id="applicantDialog">
+    <form id="applicantForm">
+        <div class="dialog-head"><h2 id="formTitle">New Applicant</h2><button type="button" class="light" id="closeForm">Close</button></div>
+        <div class="dialog-body grid">
+            <input type="hidden" id="applicantId">
+            <h3 class="section-title">Application</h3>
+            <div><label for="name">Applicant name *</label><input id="name" required></div>
+            <div><label for="phone">Phone number</label><input id="phone" type="tel"></div>
+            <div><label for="email">Email *</label><input id="email" type="email" required></div>
+            <div><label for="position">Position *</label><input id="position" required></div>
+            <div><label for="shift">Shift</label><input id="shift" placeholder="Example: 6–2"></div>
+            <div><label for="idAttached">License / state ID attached</label><select id="idAttached"><option value="">Not checked</option><option>Yes</option><option>No</option></select></div>
+            <div><label for="ssAttached">Social Security card attached</label><select id="ssAttached"><option value="">Not checked</option><option>Yes</option><option>No</option></select></div>
+
+            <h3 class="section-title">Fingerprint screening</h3>
+            <div><label for="fingerprintAppointmentDate">Fingerprint appointment date</label><input id="fingerprintAppointmentDate" type="date"></div>
+            <div><label for="fingerprintCompleted">Fingerprint appointment completed</label><select id="fingerprintCompleted"><option value="">Pending</option><option>Yes</option><option>No</option></select></div>
+            <div><label for="fingerprintResult">Fingerprint result</label><select id="fingerprintResult"><option value="">Pending</option><option>Clear</option><option>Record Found</option></select></div>
+            <div><label for="fingerprintReceipt">Fingerprint receipt</label><select id="fingerprintReceipt"><option value="">Pending</option><option>Received</option><option>Missing</option></select></div>
+            <div><label for="backgroundReview">Background follow-up</label><select id="backgroundReview"><option value="">None</option><option>Applicant Documentation Needed</option><option>Management Review Required</option><option>Pre-Adverse Action Process</option><option>Cleared After Review</option></select></div>
+            <div><label for="preAdverseSentDate">Pre-adverse notice sent</label><input id="preAdverseSentDate" type="date"></div>
+            <div><label for="backgroundResponse">Applicant response</label><select id="backgroundResponse"><option value="">Not applicable / Pending</option><option>Received</option><option>No Response</option></select></div>
+            <div><label for="managementDecision">Management decision</label><select id="managementDecision"><option value="">Pending</option><option>Cleared to Continue</option><option>Do Not Hire</option></select></div>
+            <div><label for="finalAdverseSentDate">Final adverse notice sent</label><input id="finalAdverseSentDate" type="date"></div>
+
+            <h3 class="section-title">Offer</h3>
+            <div><label for="payRate">Pay rate</label><input id="payRate" inputmode="decimal" placeholder="Example: 17.00"></div>
+            <div><label for="offerSentDate">Offer sent date</label><input id="offerSentDate" type="date"></div>
+            <div><label for="offerReply">Offer reply</label><select id="offerReply"><option value="">Waiting</option><option>Accepted</option><option>Declined</option></select></div>
+            <div><label for="acceptanceDate">Acceptance date</label><input id="acceptanceDate" type="date"></div>
+
+            <h3 class="section-title">Orientation</h3>
+            <div><label for="orientation1">First orientation date</label><input id="orientation1" type="date"></div>
+            <div><label for="orientation1Result">First orientation result</label><select id="orientation1Result"><option value="">Scheduled</option><option>Attended</option><option>No-Show</option></select></div>
+            <div><label for="orientation2">Second orientation date</label><input id="orientation2" type="date"></div>
+            <div><label for="orientation2Result">Second orientation result</label><select id="orientation2Result"><option value="">Scheduled</option><option>Attended</option><option>No-Show</option></select></div>
+
+            <h3 class="section-title">Internal notes</h3>
+            <div class="span-2"><label for="notes">Notes</label><textarea id="notes" placeholder="Do not enter SSNs, birthdates, or conviction details."></textarea></div>
+            <div><label for="manualClose">Close application</label><select id="manualClose"><option value="">Keep open</option><option>Not Selected</option><option>Applicant Withdrew</option><option>Unresponsive</option></select></div>
+        </div>
+        <div class="dialog-foot"><button type="button" class="secondary" id="cancelForm">Cancel</button><button type="submit">Save Applicant</button></div>
+    </form>
+</dialog>
+
+<dialog id="emailDialog">
+    <div class="dialog-head"><h2 id="emailTitle">Applicant Email</h2><button type="button" class="light" id="closeEmail">Close</button></div>
+    <div class="dialog-body">
+        <p><strong>To:</strong> <span id="emailTo"></span></p>
+        <p><strong>Subject:</strong> <span id="emailSubject"></span></p>
+        <div id="emailAttachments" class="notice" style="display:none"></div>
+        <div class="email-box" id="emailBody"></div>
+    </div>
+    <div class="dialog-foot"><button class="light" id="copyEmail">Copy Email</button><button class="secondary" id="markEmailSent">Mark as Sent</button><button id="openEmail">Open in Email</button></div>
+</dialog>
+
+<dialog id="printDialog">
+    <div class="dialog-head"><h2>Supervisor Update</h2><button type="button" class="light" id="closePrint">Close</button></div>
+    <div class="dialog-body grid">
+        <div><label for="printPosition">Position</label><select id="printPosition"><option value="">All positions</option></select></div>
+        <div><label for="printTitle">Page title</label><input id="printTitle" value="Applicant Status Update"></div>
+        <div style="align-self:end"><button id="runPrint" type="button">Print Large-Text Update</button></div>
+    </div>
+</dialog>
+
+<div id="printArea"></div>
+
+<script>
+const STORAGE_KEY = 'landmarkFingerprintApplicantTrackerV1';
+const fields = ['name','phone','email','position','shift','idAttached','ssAttached','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
+let applicants = loadApplicants();
+let emailDraft = null;
+
+const $ = id => document.getElementById(id);
+const todayText = () => new Date().toLocaleDateString();
+const printTimestampText = () => new Date().toLocaleString([], {year:'numeric', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'});
+const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const fmtDate = value => value ? new Date(value + 'T12:00:00').toLocaleDateString() : '';
+function businessDaysElapsed(startValue, endValue = new Date()) {
+    if (!startValue) return 0;
+    const start = new Date(startValue + 'T12:00:00');
+    const end = new Date(endValue);
+    end.setHours(12,0,0,0);
+    let count = 0;
+    const cursor = new Date(start);
+    cursor.setDate(cursor.getDate() + 1);
+    while (cursor <= end) {
+        const day = cursor.getDay();
+        if (day !== 0 && day !== 6) count++;
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    return count;
+}
+
+function loadApplicants() {
+    try { const value = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(value) ? value : []; }
+    catch { return []; }
+}
+
+function saveApplicants() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
+    $('saveMessage').textContent = 'Saved on this computer at ' + new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    render();
+}
+
+function statusFor(a) {
+    if (a.orientation1Result === 'Attended' || a.orientation2Result === 'Attended') {
+        return ['Hired', 'Completed', 'done'];
+    }
+    if (a.orientation1Result === 'No-Show' && a.orientation2Result === 'No-Show') return ['Closed—Two Orientation No-Shows', 'Application closed', 'closed'];
+    if (a.manualClose) return ['Closed—' + a.manualClose, 'Application closed', 'closed'];
+    if (a.backgroundReview === 'Applicant Documentation Needed') return ['Applicant Documentation Needed', 'Applicant must send conviction information', 'attention'];
+    if (a.backgroundReview === 'Management Review Required') return ['Management Review Required', 'Send to management for decision', 'attention'];
+    if (a.managementDecision === 'Do Not Hire' && !a.finalAdverseSentDate) return ['Final Adverse Notice Required', 'Complete the final adverse-action process', 'attention'];
+    if (a.finalAdverseSentDate) return ['Closed—Background Decision', 'Final adverse notice recorded', 'closed'];
+    if (a.backgroundReview === 'Pre-Adverse Action Process' || a.preAdverseSentDate) return ['Pre-Adverse Action Process', 'Allow review and record applicant response', 'attention'];
+    if (a.fingerprintResult === 'Record Found') return ['Background Review Needed', 'Select the correct follow-up', 'attention'];
+    if (a.fingerprintResult === 'Clear' && a.fingerprintReceipt === 'Received') {
+        if (!a.offerSentDate) return ['Ready for Offer', 'Enter pay and orientation date; send offer', 'done'];
+        if (a.offerReply === 'Declined') return ['Offer Declined', 'Close application', 'closed'];
+        if (a.offerReply !== 'Accepted') return ['Offer Sent—Waiting for Reply', 'Applicant must accept by email', 'attention'];
+        if (a.orientation1Result === 'No-Show' && !a.orientation2) return ['Needs New Orientation Date', 'Schedule second and final orientation', 'attention'];
+        if (a.orientation2) return ['Second Orientation Scheduled', 'Attend orientation on ' + fmtDate(a.orientation2), 'attention'];
+        if (a.orientation1) return ['Orientation Scheduled', 'Attend orientation on ' + fmtDate(a.orientation1), ''];
+        return ['Offer Accepted', 'Schedule orientation', 'done'];
+    }
+    if (a.fingerprintCompleted === 'Yes') return ['Fingerprint Results Pending', 'Confirm receipt and review fingerprint results', ''];
+    if (a.fingerprintAppointmentDate) return ['Fingerprint Appointment Scheduled', 'Confirm appointment completed and collect receipt', 'attention'];
+    if (a.idAttached === 'No' || a.ssAttached === 'No') return ['More Information Needed', 'Obtain missing ID/card copy', 'attention'];
+    return ['Application Received', 'Schedule fingerprint appointment', ''];
+}
+
+function render() {
+    const q = $('search').value.trim().toLowerCase();
+    const stage = $('stageFilter').value;
+    const position = $('positionFilter').value;
+    const visible = applicants.filter(a => {
+        const s = statusFor(a)[0];
+        const haystack = [a.name,a.position,a.shift,a.email].join(' ').toLowerCase();
+        return (!q || haystack.includes(q)) && (!stage || s === stage) && (!position || a.position === position);
+    }).sort((a,b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+
+    $('applicantRows').innerHTML = visible.length ? visible.map(a => {
+        const [status,next,klass] = statusFor(a);
+        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
+    }).join('') : '<tr><td colspan="6">No applicants match this view.</td></tr>';
+    refreshOptions();
+}
+
+function refreshOptions() {
+    const selectedStage = $('stageFilter').value, selectedPosition = $('positionFilter').value, selectedPrint = $('printPosition').value;
+    const stages = [...new Set(applicants.map(a => statusFor(a)[0]))].sort();
+    const positions = [...new Set(applicants.map(a => a.position).filter(Boolean))].sort();
+    $('stageFilter').innerHTML = '<option value="">All stages</option>' + stages.map(x => `<option>${esc(x)}</option>`).join('');
+    $('positionFilter').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
+    $('printPosition').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
+    $('stageFilter').value = selectedStage; $('positionFilter').value = selectedPosition; $('printPosition').value = selectedPrint;
+}
+
+function openNew() {
+    $('applicantForm').reset(); $('applicantId').value = ''; $('formTitle').textContent = 'New Applicant'; $('applicantDialog').showModal();
+}
+
+window.editApplicant = id => {
+    const a = applicants.find(x => x.id === id); if (!a) return;
+    $('applicantId').value = a.id; fields.forEach(f => $(f).value = a[f] || '');
+    $('formTitle').textContent = 'Update ' + a.name; $('applicantDialog').showModal();
+};
+
+
+window.moveToSunshine = id => {
+    const a = applicants.find(x => x.id === id); if (!a) return;
+    const status = statusFor(a)[0];
+    if (!['Hired','Hired—See Sunshine Tracker'].includes(status)) { alert('Only a Sunshine Aide who has attended orientation can be moved to the Sunshine Aide Tracker.'); return; }
+    const key = 'landmarkSunshineAideTrackerV1';
+    let sunshine = [];
+    try { const stored = JSON.parse(localStorage.getItem(key)); sunshine = Array.isArray(stored) ? stored : []; } catch { sunshine = []; }
+    if (sunshine.some(r => r.sourceApplicantId === a.id)) {
+        if (!a.sunshineTransferredAt) { a.sunshineTransferredAt = new Date().toISOString(); a.updatedAt = new Date().toISOString(); saveApplicants(); }
+        alert(a.name + ' is already in the Sunshine Aide Tracker.');
+        return;
+    }
+    const hireDate = a.orientation2Result === 'Attended' && a.orientation2 ? a.orientation2 : a.orientation1;
+    const due = hireDate ? new Date(hireDate + 'T12:00:00') : null;
+    if (due) due.setDate(due.getDate() + 30);
+    const evaluationDueDate = due ? due.toISOString().slice(0,10) : '';
+    sunshine.push({
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        sourceApplicantId: a.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        name: a.name || '', phone: a.phone || '', email: a.email || '', shift: a.shift || '',
+        hireDate: hireDate || '', supervisor: '', evaluationDueDate,
+        manualStatus:'', attendance:'', punctuality:'', residentInteraction:'', followsDirections:'', teamwork:'', reliability:'',
+        evaluationDate:'', schoolDecision:'', decisionReason:'', recommendDate:'', schoolStartDate:'', schoolCompletionDate:'',
+        examResult:'', certificationDate:'', cnaConversionDate:'', exitDate:'', exitReason:'', notes:''
+    });
+    localStorage.setItem(key, JSON.stringify(sunshine));
+    a.sunshineTransferredAt = new Date().toISOString();
+    a.updatedAt = new Date().toISOString();
+    saveApplicants();
+    if (confirm(a.name + ' was added to the Sunshine Aide Tracker. Open it now?')) location.href = '/sunshine-aide-tracker';
+};
+
+window.deleteApplicant = id => {
+    const a = applicants.find(x => x.id === id); if (!a || !confirm('Delete ' + a.name + '? This cannot be undone unless you have a backup.')) return;
+    applicants = applicants.filter(x => x.id !== id); saveApplicants();
+};
+
+function emailTypes(a) {
+    const first = (a.name || 'Applicant').trim().split(/\s+/)[0];
+    const positionLower = (a.position || '').toLowerCase();
+    const supervisor = positionLower.includes('cna') || positionLower.includes('certified nursing assistant')
+        ? 'Lolita Williams'
+        : positionLower.includes('hsk') || positionLower.includes('housekeep')
+        ? 'Larry McCray'
+        : positionLower.includes('dty') || positionLower.includes('diet')
+        ? 'Linda Bracken'
+        : /(^|\s)(rn|lpn)(\s|$)/.test(positionLower) || positionLower.includes('nurse') || positionLower.includes('nursing')
+        ? 'L. Dille'
+        : '[ENTER SUPERVISOR]';
+    const clinicalDifferential = positionLower.includes('cna') || positionLower.includes('certified nursing assistant') || /(^|\s)(rn|lpn)(\s|$)/.test(positionLower) || positionLower.includes('nurse') || positionLower.includes('nursing');
+    const pay = a.payRate ? '$' + a.payRate.replace(/^\$/, '') : '[ENTER PAY RATE]';
+    const orientationDate = a.orientation1 ? new Date(a.orientation1 + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'}) : '[ENTER ORIENTATION DATE]';
+    const differentialText = clinicalDifferential ? ' If you are hired for a CNA or nursing position, shift differentials may apply based on your assigned shift, eligibility, and company policy. Additional information will be provided during orientation.' : '';
+    const offerBody = `READING THIS EMAIL IN ITS ENTIRETY IS REQUIRED. If you do not have all required documentation and necessary apps completed before orientation, your orientation will be rescheduled.\n\n${a.name},\n\nWe are pleased to offer you employment with Landmark South Nursing & Rehabilitation as a ${a.position}.\n\nYour base hourly rate will be ${pay} per hour. Pay rates are set according to the company’s established pay scale and are non-negotiable.${differentialText}\n\nYour orientation is scheduled as follows:\n\nDate: ${orientationDate}\nTime: 10:00 a.m.\nLocation:\nLandmark South Nursing & Rehabilitation\n18180 Jefferson Hwy\nBaton Rouge, LA 70817\n\nOrientation is paid and will be considered your official start date. Late arrivals will not be permitted and orientation will be rescheduled. Please arrive promptly and dressed in scrubs or business attire.\n\nYou must remain on-site until all required orientation videos have been completed, which may take six (6) or more hours. Orientation is scheduled until 4:30 p.m. If you are unable to stay for the entire orientation, please do not schedule at this time.\n\nIf all required videos are not completed during orientation, you will be required to return the following morning at 8:30 a.m. to finish the remaining assignments.\n\nYou will also be required to complete a drug screening.\n\nYour immediate supervisor will be ${supervisor}.\n\nREQUIRED BEFORE ORIENTATION\n\nPlease download these free apps before arriving:\n- TalentLMS\n- UKG Ready\n- Payactiv\n\nPlease bring a laptop, tablet, or smartphone capable of streaming videos, along with appropriate chargers and headphones.\n\nI-9 DOCUMENTATION\n\nYou must bring original, unexpired documentation establishing your identity and authorization to work in the United States. You may bring either:\n\n- One List A document, such as a U.S. passport, Permanent Resident Card, or Employment Authorization Document; OR\n- One List B document, such as a driver’s license or state-issued ID, AND one List C document, such as an unrestricted Social Security card or an original or certified birth certificate.\n\nThe employer cannot choose which acceptable documents you present. The complete list is available at: https://www.uscis.gov/i-9-central/form-i-9-acceptable-documents\n\nDIRECT DEPOSIT\n\nYou must provide information from your bank showing that you are the account holder: bank name, your name, routing number, and account number. You may provide a voided check or a screenshot from your bank account app. This information must be emailed to apriest@asimgt.com.\n\nARRIVAL INSTRUCTIONS\n\n- Bring a pen.\n- The orientation classroom is cold. Bring a sweater or jacket.\n- Sign in at the front kiosk located in the waiting room.\n- You do not need to check in with the receptionist.\n- After signing in, remain in the waiting room until a staff member comes for you.\n- Do not go to the classroom or other areas of the facility on your own.\n- Children are not permitted to attend orientation.\n\nIf you do not reply to this email confirming your attendance, we will consider the position declined and remove you from the orientation schedule. Confirmation must be provided by email only.\n\nWe look forward to welcoming you to Landmark South.`;
+    const options = [
+        {id:'application_received', label:'Application Received / Fingerprint Instructions', subject:'Application Received: Action Required', body:`Hello ${first},
+
+Due to the high volume of applications we receive, all communication regarding your application, including questions, requests, and status updates, must be conducted by email.
+
+We have received your application and entered it into our system. Please schedule your required fingerprint appointment using the instructions provided by Human Resources. Email confirmation of your appointment and send your receipt after attending.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`},
+        {id:'fingerprint_reminder', label:'Fingerprint Appointment Reminder', subject:'Reminder: Fingerprint Appointment', body:`Hello ${first},
+
+Please schedule or complete your required fingerprint appointment and email confirmation and your fingerprint receipt to Human Resources.
+
+It is your responsibility to complete all required steps if you wish to continue with the application process. No additional reminders will be sent regarding this invitation. Please reply with an update within 72 hours. Without a response, your application may be closed.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`},
+        {id:'background_underway', label:'Background Checks Underway', subject:'Background Checks Underway', body:`Hello ${first},
+
+Thank you for completing your fingerprint appointment. Please email your appointment receipt if you have not already done so. We will review your fingerprint screening results when received.
+
+Please check your email regularly for time-sensitive instructions or requests for more information. Failure to respond may delay your application.
+
+We will contact you by email when the next step is ready.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`},
+        {id:'employment_offer', label:'Employment Offer / Orientation', subject:'Employment Offer and Orientation Information', body:offerBody},
+        {id:'background_information', label:'Request Background Information', subject:'Action Required: Additional Background Information', body:`Hello ${first},
+
+Your background check requires additional information before your application can be considered further. It is your responsibility to provide official documentation pertaining to the reported record, such as the final court disposition or other relevant court documents.
+
+Please reply to this email with the requested documentation within 72 hours. Do not send your Social Security number or birthdate by email. If the information is not received within 72 hours, your application may be closed.
+
+Providing information does not guarantee employment. The information will be reviewed as part of the hiring process.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`},
+        {id:'not_selected', label:'Not Selected (Background Not a Factor)', subject:'Application Status Update', body:`Hello ${first},
+
+Thank you for your interest in employment with Landmark South Nursing and Rehabilitation Center. We have decided to move forward with another applicant for this position.
+
+We appreciate the time you invested in the application process and wish you the best in your job search.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`}
+    ];
+
+    const backgroundIssue = a.fingerprintResult === 'Record Found' || ['Management Review Required','Pre-Adverse Action Process'].includes(a.backgroundReview) || a.preAdverseSentDate;
+    if (backgroundIssue) {
+        options.push({
+            id:'pre_adverse',
+            label:'AD-303 Pre-Adverse Action Email',
+            subject:'Important Notice Regarding Your Background Check',
+            attachments:'BEFORE SENDING: Have the Administrator complete AD-303. Attach the completed AD-303, the consumer report being relied upon, and the FCRA Summary of Rights.',
+            body:`Hello ${first},
+
+Please review the attached Pre-Adverse Action Letter (AD-303), along with the attached copy of the consumer report and Summary of Your Rights Under the Fair Credit Reporting Act.
+
+The information in the consumer report may adversely affect your application for employment. No final adverse employment decision has been made at this time.
+
+Please review the materials carefully and notify us promptly if you believe any information in the consumer report is incorrect or if you have information you would like considered.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`
+        });
+    }
+
+    if (a.managementDecision === 'Do Not Hire' || a.finalAdverseSentDate) {
+        options.push({
+            id:'final_adverse',
+            label:'AD-304 Final Adverse Action Email',
+            subject:'Final Notice Regarding Your Application',
+            attachments:'BEFORE SENDING: Attach the completed AD-304 Adverse Action Letter. The tracker will prevent this email from opening until 5 business days have elapsed after the recorded AD-303 date.',
+            body:`Hello ${first},
+
+Please review the attached Adverse Action Letter (AD-304) regarding the final decision on your application for employment.
+
+The attached letter contains important information about the consumer report used in the decision and your rights regarding that report.
+
+Thank you,
+Landmark South Nursing and Rehabilitation Center`
+        });
+    }
+    return options;
+}
+
+window.showEmailMenu = id => {
+    const a = applicants.find(x => x.id === id); if (!a) return;
+    const options = emailTypes(a);
+    const log = a.emailLog || {};
+    const menu = options.map((option,index) => `${index+1}. ${option.label}${log[option.id] ? ' (SENT ' + new Date(log[option.id]).toLocaleDateString() + ')' : ''}`).join('\n');
+    const choice = prompt('Choose email:\n' + menu + '\n\nEnter 1 through ' + options.length + ':');
+    const selected = options[Number(choice)-1]; if (!selected) return;
+    if (log[selected.id] && !confirm(`${selected.label} was already marked sent on ${new Date(log[selected.id]).toLocaleString()}.\n\nOpen another draft anyway?`)) return;
+    if (selected.id === 'not_selected' && (a.fingerprintResult === 'Record Found' || a.backgroundReview)) {
+        alert('STOP: The Not Selected email cannot be used when background information affected the decision. Use the applicable company adverse-action process.');
+        return;
+    }
+    if (selected.id === 'employment_offer' && (!a.payRate || !a.orientation1)) {
+        alert('Enter the pay rate and first orientation date before creating the offer email.');
+        return;
+    }
+    if (selected.id === 'pre_adverse' && !['Record Found'].includes(a.fingerprintResult) && !['Management Review Required','Pre-Adverse Action Process'].includes(a.backgroundReview)) {
+        alert('Record the background issue or management review status before creating the AD-303 email.');
+        return;
+    }
+    if (selected.id === 'final_adverse') {
+        if (a.managementDecision !== 'Do Not Hire') {
+            alert('Management decision must be recorded as Do Not Hire before creating the AD-304 email.');
+            return;
+        }
+        if (!a.preAdverseSentDate) {
+            alert('Record the AD-303 pre-adverse sent date before creating the AD-304 email.');
+            return;
+        }
+        const elapsed = businessDaysElapsed(a.preAdverseSentDate);
+        if (elapsed < 5) {
+            alert(`STOP: Only ${elapsed} business day${elapsed === 1 ? '' : 's'} have elapsed since AD-303. Company policy considers 5 business days a reasonable amount of time before final adverse action.`);
+            return;
+        }
+    }
+    emailDraft = {...selected, to:a.email, applicantId:a.id};
+    $('emailTitle').textContent = selected.label;
+    $('emailTo').textContent = a.email;
+    $('emailSubject').textContent = selected.subject;
+    const attachmentBox = $('emailAttachments');
+    if (selected.attachments) {
+        attachmentBox.textContent = selected.attachments;
+        attachmentBox.style.display = 'block';
+    } else {
+        attachmentBox.textContent = '';
+        attachmentBox.style.display = 'none';
+    }
+    $('emailBody').textContent = selected.body;
+    $('markEmailSent').textContent = log[selected.id] ? 'Mark Resent' : 'Mark as Sent';
+    $('emailDialog').showModal();
+};
+
+$('applicantForm').addEventListener('submit', e => {
+    e.preventDefault(); const id = $('applicantId').value; const old = applicants.find(a => a.id === id);
+    const record = {id: id || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())), createdAt: old?.createdAt || new Date().toISOString()};
+    fields.forEach(f => record[f] = $(f).value.trim());
+    record.emailLog = old?.emailLog || {};
+    record.updatedAt = new Date().toISOString();
+    if (old) applicants = applicants.map(a => a.id === id ? record : a); else applicants.push(record);
+    saveApplicants(); $('applicantDialog').close();
+});
+
+$('newBtn').onclick = openNew; $('closeForm').onclick = $('cancelForm').onclick = () => $('applicantDialog').close();
+$('closeEmail').onclick = () => $('emailDialog').close();
+$('closePrint').onclick = () => $('printDialog').close();
+$('printBtn').onclick = () => $('printDialog').showModal();
+['search','stageFilter','positionFilter'].forEach(id => $(id).addEventListener(id === 'search' ? 'input' : 'change', render));
+$('clearFilters').onclick = () => { $('search').value=''; $('stageFilter').value=''; $('positionFilter').value=''; render(); };
+
+$('copyEmail').onclick = async () => { if (!emailDraft) return; await navigator.clipboard.writeText(`To: ${emailDraft.to}\nSubject: ${emailDraft.subject}\n\n${emailDraft.body}`); $('copyEmail').textContent='Copied'; setTimeout(()=>$('copyEmail').textContent='Copy Email',1500); };
+$('openEmail').onclick = () => { if (!emailDraft) return; location.href = `mailto:${encodeURIComponent(emailDraft.to)}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`; };
+$('markEmailSent').onclick = () => {
+    if (!emailDraft) return;
+    const a = applicants.find(x => x.id === emailDraft.applicantId); if (!a) return;
+    const prior = a.emailLog?.[emailDraft.id];
+    const question = prior
+        ? `${emailDraft.label} was previously marked sent on ${new Date(prior).toLocaleString()}. Mark it as resent now?`
+        : `Confirm that you sent ${emailDraft.label} to ${a.name}.`;
+    if (!confirm(question)) return;
+    a.emailLog = a.emailLog || {};
+    a.emailLog[emailDraft.id] = new Date().toISOString();
+    if (emailDraft.id === 'employment_offer' && !a.offerSentDate) a.offerSentDate = new Date().toISOString().slice(0,10);
+    if (emailDraft.id === 'background_information') a.backgroundReview = 'Applicant Documentation Needed';
+    if (emailDraft.id === 'pre_adverse') {
+        a.backgroundReview = 'Pre-Adverse Action Process';
+        if (!a.preAdverseSentDate) a.preAdverseSentDate = new Date().toISOString().slice(0,10);
+    }
+    if (emailDraft.id === 'final_adverse') {
+        if (!a.finalAdverseSentDate) a.finalAdverseSentDate = new Date().toISOString().slice(0,10);
+    }
+    if (emailDraft.id === 'not_selected') a.manualClose = 'Not Selected';
+    a.updatedAt = new Date().toISOString();
+    saveApplicants();
+    $('emailDialog').close();
+};
+
+$('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify({version:1, exportedAt:new Date().toISOString(), applicants}, null, 2)], {type:'application/json'});
+    const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`Applicant_Tracker_Backup_${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(link.href);
+};
+
+$('importFile').onchange = async e => {
+    const file=e.target.files[0]; if(!file) return;
+    try { const data=JSON.parse(await file.text()); const incoming=Array.isArray(data)?data:data.applicants; if(!Array.isArray(incoming)) throw Error(); if(!confirm(`Replace the current tracker with ${incoming.length} applicant(s) from this backup?`)) return; applicants=incoming; saveApplicants(); }
+    catch { alert('That is not a valid Applicant Tracker backup.'); }
+    finally { e.target.value=''; }
+};
+
+$('runPrint').onclick = () => {
+    const position=$('printPosition').value;
+    const rows=applicants
+        .filter(a => !position || a.position===position)
+        .filter(a => !statusFor(a)[0].startsWith('Closed') && statusFor(a)[0] !== 'Hired');
+    $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Update')}</h1><div class="print-date">Printed ${esc(printTimestampText())}${position ? ' — ' + esc(position) : ''}</div><table><thead><tr><th>Applicant</th><th>Phone</th><th>Position / Shift</th><th>Current Stage</th><th>Next Step</th></tr></thead><tbody>${rows.length ? rows.map(a=>{const [s,n]=statusFor(a);return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(s)}</td><td>${esc(n)}</td></tr>`}).join('') : '<tr><td colspan="5">No active applicants.</td></tr>'}</tbody></table><div class="staffing-needs"><h2>Supervisor Staffing Needs</h2><div class="staffing-line"><strong>What position(s) do you currently need filled?</strong> <span class="blank-line"></span></div><div class="staffing-line"><strong>Would you like HR to start an Indeed listing?</strong> &nbsp; &#9633; Yes &nbsp;&nbsp; &#9633; No</div><div class="staffing-line"><strong>If yes, position(s) to list:</strong> <span class="blank-line"></span></div></div>`;
+    $('printDialog').close();
+    window.print();
+};
+
+render();
+</script>
+</body>
+</html>
