@@ -108,8 +108,6 @@
             <div><label for="email">Email *</label><input id="email" type="email" required></div>
             <div><label for="position">Position *</label><input id="position" required></div>
             <div><label for="shift">Shift</label><input id="shift" placeholder="Example: 6–2"></div>
-            <div><label for="idAttached">License / state ID attached</label><select id="idAttached"><option value="">Not checked</option><option>Yes</option><option>No</option></select></div>
-            <div><label for="ssAttached">Social Security card attached</label><select id="ssAttached"><option value="">Not checked</option><option>Yes</option><option>No</option></select></div>
 
             <h3 class="section-title">Fingerprint screening</h3>
             <div><label for="fingerprintAppointmentDate">Fingerprint appointment date</label><input id="fingerprintAppointmentDate" type="date"></div>
@@ -166,7 +164,7 @@
 
 <script>
 const STORAGE_KEY = 'landmarkFingerprintApplicantTrackerV1';
-const fields = ['name','phone','email','position','shift','idAttached','ssAttached','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
+const fields = ['name','phone','email','position','shift','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
 let applicants = loadApplicants();
 let emailDraft = null;
 
@@ -225,7 +223,6 @@ function statusFor(a) {
     }
     if (a.fingerprintCompleted === 'Yes') return ['Fingerprint Results Pending', 'Confirm receipt and review fingerprint results', ''];
     if (a.fingerprintAppointmentDate) return ['Fingerprint Appointment Scheduled', 'Confirm appointment completed and collect receipt', 'attention'];
-    if (a.idAttached === 'No' || a.ssAttached === 'No') return ['More Information Needed', 'Obtain missing ID/card copy', 'attention'];
     return ['Application Received', 'Schedule fingerprint appointment', ''];
 }
 
