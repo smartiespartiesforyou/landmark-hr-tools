@@ -57,10 +57,12 @@
             #printArea tr { page-break-inside:avoid; page-break-after:auto; }
             #printArea th { background:#ddd !important; color:black; }
             #printArea th, #printArea td { border:1px solid #555; padding:7px; }
-            #printArea .print-section { margin-top:14px; }\n            #printArea .print-section h2 { font-size:13pt; margin:0 0 5px; page-break-after:avoid; }\n            #printArea .print-key p { font-size:9pt; }\n            #printArea .staffing-needs { margin-top:14px; border:1px solid #555; padding:10px 12px; page-break-inside:avoid; font-size:11pt; }
-            #printArea .staffing-needs h2 { font-size:14pt; margin:0 0 8px; }
-            #printArea .staffing-line { margin:9px 0; }
-            #printArea .blank-line { display:inline-block; min-width:420px; border-bottom:1px solid #222; height:15px; vertical-align:bottom; }
+            #printArea .applicant-print-table { font-size:10pt; }
+            #printArea .applicant-print-table th, #printArea .applicant-print-table td { padding:5px 7px; }
+            #printArea .print-key { margin-top:12px; page-break-inside:avoid; }
+            #printArea .print-key h2 { font-size:10pt; margin:0 0 5px; }
+            #printArea .key-items { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:3px 10px; font-size:8pt; line-height:1.2; }
+            #printArea .print-key p { font-size:8pt; margin:7px 0 0; }
             @page { size:landscape; margin:0.35in; }
         }
     </style>
@@ -566,20 +568,19 @@ const supervisorKey = [
 $('runPrint').onclick = () => {
     const position = $('printPosition').value;
     const rows = applicants.filter(a => !position || a.position === position);
-    const tableHeaders = '<thead><tr><th>Applicant</th><th>Phone</th><th>Position / Shift</th><th>Status</th><th>Next Step</th></tr></thead>';
-    const sectionHtml = supervisorSections.map(section => {
-        const group = rows.filter(a => supervisorStatus(a)[2] === section.key)
-            .sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
-        return `<section class="print-section"><h2>${section.title} (${group.length})</h2><table>${tableHeaders}<tbody>${group.length ? group.map(a => {
-            const [status, next] = supervisorStatus(a);
-            return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(status)}</td><td>${esc(next)}</td></tr>`;
-        }).join('') : '<tr><td colspan="5">None</td></tr>'}</tbody></table></section>`;
+    const order = {attention:0, progress:1, orientation:2, closed:3, hired:4};
+    const sorted = [...rows].sort((a,b) =>
+        (order[supervisorStatus(a)[2]] ?? 9) - (order[supervisorStatus(b)[2]] ?? 9) ||
+        String(a.name || '').localeCompare(String(b.name || '')));
+    const tableHeaders = '<thead><tr><th>Applicant</th><th>Phone</th><th>Position / Shift</th><th>Current Status</th><th>Next Step</th></tr></thead>';
+    const applicantRows = sorted.map(a => {
+        const [status, next] = supervisorStatus(a);
+        return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(status)}</td><td>${esc(next)}</td></tr>`;
     }).join('');
     $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Report')}</h1>
         <div class="print-date">Printed ${esc(printTimestampText())}${position ? ' — ' + esc(position) : ' — All positions'}</div>
-        ${sectionHtml}
-        <section class="print-section print-key"><h2>APPLICANT STATUS KEY</h2><table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody>${supervisorKey.map(([status,meaning])=>`<tr><td>${esc(status)}</td><td>${esc(meaning)}</td></tr>`).join('')}</tbody></table><p>Statuses reflect information available to Human Resources as of the report date. Confidential screening and employment records remain with HR.</p></section>
-        <div class="staffing-needs"><h2>Supervisor Staffing Needs</h2><div class="staffing-line"><strong>What position(s) do you currently need filled?</strong> <span class="blank-line"></span></div><div class="staffing-line"><strong>Would you like HR to start an Indeed listing?</strong> &nbsp; &#9633; Yes &nbsp;&nbsp; &#9633; No</div><div class="staffing-line"><strong>If yes, position(s) to list:</strong> <span class="blank-line"></span></div></div>`;
+        <table class="applicant-print-table">${tableHeaders}<tbody>${applicantRows || '<tr><td colspan="5">No applicants to display.</td></tr>'}</tbody></table>
+        <section class="print-key"><h2>Applicant Status Key</h2><div class="key-items">${supervisorKey.map(([status,meaning])=>`<span><strong>${esc(status)}:</strong> ${esc(meaning)}</span>`).join('')}</div><p>Statuses reflect information available to Human Resources as of the report date. Confidential screening and employment records remain with HR.</p></section>`;
     $('printDialog').close();
     window.print();
 };
