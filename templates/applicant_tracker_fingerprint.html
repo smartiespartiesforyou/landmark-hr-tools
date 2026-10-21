@@ -57,7 +57,7 @@
             #printArea tr { page-break-inside:avoid; page-break-after:auto; }
             #printArea th { background:#ddd !important; color:black; }
             #printArea th, #printArea td { border:1px solid #555; padding:7px; }
-            #printArea .staffing-needs { margin-top:14px; border:1px solid #555; padding:10px 12px; page-break-inside:avoid; font-size:11pt; }
+            #printArea .print-section { margin-top:14px; }\n            #printArea .print-section h2 { font-size:13pt; margin:0 0 5px; page-break-after:avoid; }\n            #printArea .print-key p { font-size:9pt; }\n            #printArea .staffing-needs { margin-top:14px; border:1px solid #555; padding:10px 12px; page-break-inside:avoid; font-size:11pt; }
             #printArea .staffing-needs h2 { font-size:14pt; margin:0 0 8px; }
             #printArea .staffing-line { margin:9px 0; }
             #printArea .blank-line { display:inline-block; min-width:420px; border-bottom:1px solid #222; height:15px; vertical-align:bottom; }
@@ -155,8 +155,8 @@
     <div class="dialog-head"><h2>Supervisor Update</h2><button type="button" class="light" id="closePrint">Close</button></div>
     <div class="dialog-body grid">
         <div><label for="printPosition">Position</label><select id="printPosition"><option value="">All positions</option></select></div>
-        <div><label for="printTitle">Page title</label><input id="printTitle" value="Applicant Status Update"></div>
-        <div style="align-self:end"><button id="runPrint" type="button">Print Large-Text Update</button></div>
+        <div><label for="printTitle">Page title</label><input id="printTitle" value="Applicant Status Report"></div>
+        <div style="align-self:end"><button id="runPrint" type="button">Print Applicant Status Report</button></div>
     </div>
 </dialog>
 
@@ -515,12 +515,71 @@ $('importFile').onchange = async e => {
     finally { e.target.value=''; }
 };
 
+// Supervisor-facing status names deliberately omit confidential screening findings.
+function supervisorStatus(a) {
+    const [internal, next] = statusFor(a);
+    if (internal === 'Hired') return ['Hired', 'Hiring process completed', 'hired'];
+    if (internal.startsWith('Closed') || internal === 'Offer Declined') {
+        const reason = (a.manualClose || '').toLowerCase();
+        let label = 'Not Selected';
+        if (internal === 'Offer Declined' || /withdraw|declin/.test(reason)) label = 'Withdrawn';
+        else if (/no.show|no show/.test(reason) || internal.includes('No-Shows')) label = 'No Show';
+        else if (/no.response|no response/.test(reason)) label = 'No Response';
+        return [label, 'Application closed', 'closed'];
+    }
+    if (internal === 'Orientation Scheduled' || internal === 'Second Orientation Scheduled') {
+        const date = internal === 'Second Orientation Scheduled' ? a.orientation2 : a.orientation1;
+        return ['Orientation Scheduled', date ? 'Orientation ' + fmtDate(date) : 'Await orientation', 'orientation'];
+    }
+    if (internal === 'Ready for Offer' || internal === 'Offer Accepted') {
+        return ['Ready for Orientation', internal === 'Ready for Offer' ? 'HR preparing offer' : 'Schedule orientation', 'orientation'];
+    }
+    if (internal === 'Needs New Orientation Date') return ['Action Needed', 'Reschedule orientation', 'attention'];
+    if (internal === 'Offer Sent—Waiting for Reply') return ['Action Needed', 'Await applicant response', 'attention'];
+    if (internal === 'Fingerprint Appointment Scheduled') return ['Fingerprint Scheduled', 'Await scheduled appointment', 'progress'];
+    if (internal === 'Fingerprint Results Pending') return ['Background Pending', 'HR awaiting screening completion', 'progress'];
+    if (internal === 'Application Received') return ['Application Received', 'HR processing application', 'attention'];
+    // Screening or adverse-action details must stay on the HR-only tracker.
+    return ['Under Review', 'HR reviewing application', 'progress'];
+}
+const supervisorSections = [
+    {key:'attention', title:'1. ACTION NEEDED'},
+    {key:'progress', title:'2. IN PROGRESS'},
+    {key:'orientation', title:'3. READY FOR ORIENTATION / SCHEDULED'},
+    {key:'closed', title:'4. CLOSED APPLICATIONS'},
+    {key:'hired', title:'5. HIRED'}
+];
+const supervisorKey = [
+    ['Application Received','Application received; HR processing'],
+    ['Fingerprint Scheduled','Fingerprint appointment scheduled'],
+    ['Background Pending','Screening in progress'],
+    ['Under Review','HR reviewing eligibility or requirements'],
+    ['Action Needed','An applicant or HR follow-up is outstanding'],
+    ['Ready for Orientation','HR preparing the next hiring step'],
+    ['Orientation Scheduled','Orientation date assigned'],
+    ['Withdrawn','Applicant declined or withdrew'],
+    ['No Response','Applicant has not responded'],
+    ['No Show','Applicant missed a scheduled appointment or orientation'],
+    ['Not Selected','Application will not move forward'],
+    ['Hired','Hiring process completed']
+];
 $('runPrint').onclick = () => {
-    const position=$('printPosition').value;
-    const rows=applicants
-        .filter(a => !position || a.position===position)
-        .filter(a => !statusFor(a)[0].startsWith('Closed') && statusFor(a)[0] !== 'Hired');
-    $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Update')}</h1><div class="print-date">Printed ${esc(printTimestampText())}${position ? ' — ' + esc(position) : ''}</div><table><thead><tr><th>Applicant</th><th>Phone</th><th>Position / Shift</th><th>Current Stage</th><th>Next Step</th></tr></thead><tbody>${rows.length ? rows.map(a=>{const [s,n]=statusFor(a);return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(s)}</td><td>${esc(n)}</td></tr>`}).join('') : '<tr><td colspan="5">No active applicants.</td></tr>'}</tbody></table><div class="staffing-needs"><h2>Supervisor Staffing Needs</h2><div class="staffing-line"><strong>What position(s) do you currently need filled?</strong> <span class="blank-line"></span></div><div class="staffing-line"><strong>Would you like HR to start an Indeed listing?</strong> &nbsp; &#9633; Yes &nbsp;&nbsp; &#9633; No</div><div class="staffing-line"><strong>If yes, position(s) to list:</strong> <span class="blank-line"></span></div></div>`;
+    const position = $('printPosition').value;
+    const rows = applicants.filter(a => !position || a.position === position);
+    const tableHeaders = '<thead><tr><th>Applicant</th><th>Phone</th><th>Position / Shift</th><th>Status</th><th>Next Step</th></tr></thead>';
+    const sectionHtml = supervisorSections.map(section => {
+        const group = rows.filter(a => supervisorStatus(a)[2] === section.key)
+            .sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
+        return `<section class="print-section"><h2>${section.title} (${group.length})</h2><table>${tableHeaders}<tbody>${group.length ? group.map(a => {
+            const [status, next] = supervisorStatus(a);
+            return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(status)}</td><td>${esc(next)}</td></tr>`;
+        }).join('') : '<tr><td colspan="5">None</td></tr>'}</tbody></table></section>`;
+    }).join('');
+    $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Report')}</h1>
+        <div class="print-date">Printed ${esc(printTimestampText())}${position ? ' — ' + esc(position) : ' — All positions'}</div>
+        ${sectionHtml}
+        <section class="print-section print-key"><h2>APPLICANT STATUS KEY</h2><table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody>${supervisorKey.map(([status,meaning])=>`<tr><td>${esc(status)}</td><td>${esc(meaning)}</td></tr>`).join('')}</tbody></table><p>Statuses reflect information available to Human Resources as of the report date. Confidential screening and employment records remain with HR.</p></section>
+        <div class="staffing-needs"><h2>Supervisor Staffing Needs</h2><div class="staffing-line"><strong>What position(s) do you currently need filled?</strong> <span class="blank-line"></span></div><div class="staffing-line"><strong>Would you like HR to start an Indeed listing?</strong> &nbsp; &#9633; Yes &nbsp;&nbsp; &#9633; No</div><div class="staffing-line"><strong>If yes, position(s) to list:</strong> <span class="blank-line"></span></div></div>`;
     $('printDialog').close();
     window.print();
 };
