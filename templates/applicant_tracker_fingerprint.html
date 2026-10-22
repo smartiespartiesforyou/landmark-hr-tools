@@ -238,9 +238,10 @@ function statusFor(a) {
         return ['Hired', 'Completed', 'done'];
     }
     if (a.orientation1Result === 'No-Show' && a.orientation2Result === 'No-Show') return ['Closed—Two Orientation No-Shows', 'Application closed', 'closed'];
-    if (a.manualClose) return ['Closed—' + a.manualClose, 'Application closed', 'closed'];
-    if (a.backgroundReview === 'Applicant Documentation Needed') return ['Applicant Documentation Needed', 'Applicant must send conviction information', 'attention'];
-    if (a.backgroundReview === 'Management Review Required') return ['Management Review Required', 'Send to management for decision', 'attention'];
+    // A recorded pre-adverse notice is an active legal workflow and takes precedence over an earlier manual closure.
+    if (a.manualClose && !a.preAdverseSentDate && !a.finalAdverseSentDate && a.backgroundReview !== 'Pre-Adverse Action Process') return ['Closed—' + a.manualClose, 'Application closed', 'closed'];
+    if (a.backgroundReview === 'Applicant Documentation Needed' && !a.preAdverseSentDate) return ['Applicant Documentation Needed', 'Applicant must send conviction information', 'attention'];
+    if (a.backgroundReview === 'Management Review Required' && !a.preAdverseSentDate) return ['Management Review Required', 'Send to management for decision', 'attention'];
     if (a.finalAdverseSentDate) return ['Closed—Background Decision', 'Final adverse notice recorded', 'closed'];
     if (a.preAdverseSentDate) {
         const due=adverseReviewDateText(a.preAdverseSentDate);
@@ -249,6 +250,7 @@ function statusFor(a) {
         if(a.managementDecision==='Do Not Hire') return ['AD-304 — Review to Send', 'Review date '+due+' reached; verify holidays, disputes and Administrator approval', 'attention'];
         return ['AD-303 — Decision Pending', 'AD-304 review date '+due+' reached; Administrator decision required', 'attention'];
     }
+    if (a.manualClose) return ['Closed—' + a.manualClose, 'Application closed', 'closed'];
     if (a.managementDecision === 'Do Not Hire') return ['AD-303 Required', 'Complete and send AD-303 before final adverse action', 'attention'];
     if (a.backgroundReview === 'Pre-Adverse Action Process') return ['AD-303 Required', 'Send AD-303 and record the actual sent date', 'attention'];
     if (a.fingerprintResult === 'Record Found') return ['Background Review Needed', 'Select the correct follow-up', 'attention'];
