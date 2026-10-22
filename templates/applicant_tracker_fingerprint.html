@@ -108,7 +108,7 @@
             <div><label for="name">Applicant name *</label><input id="name" required></div>
             <div><label for="phone">Phone number</label><input id="phone" type="tel"></div>
             <div><label for="email">Email *</label><input id="email" type="email" required></div>
-            <div><label for="position">Position *</label><input id="position" required></div><div><label for="department">Department</label><select id="department"><option value="">Select department</option><option>CNA</option><option>Nursing</option><option>HSK</option><option>DTY</option><option>NAT</option><option>Activities</option><option>Maintenance</option><option>Laundry</option><option>Social Services</option><option>Therapy</option><option>Other</option></select></div>
+            <div><label for="position">Position *</label><input id="position" required></div><div><label for="department">Department</label><select id="department"><option value="">Select department</option><option>CNA</option><option>Nursing</option><option>HSK</option><option>DTY</option><option>NAT</option><option>Sunshine Aide</option><option>Activities</option><option>Maintenance</option><option>Laundry</option><option>Social Services</option><option>Therapy</option><option>Other</option></select></div>
             <div><label for="shift">Shift</label><input id="shift" placeholder="Example: 6–2"></div><div class="span-2"><label for="applicantStreet">Applicant mailing street address</label><input id="applicantStreet" autocomplete="street-address"></div><div><label for="applicantCity">City</label><input id="applicantCity"></div><div><label for="applicantState">State</label><input id="applicantState" value="LA" maxlength="2"></div><div><label for="applicantZip">ZIP code</label><input id="applicantZip" maxlength="10"></div>
 
             <h3 class="section-title">Fingerprint screening</h3>
@@ -289,6 +289,7 @@ function applicantDepartment(a) {
     const manual=String(a.department||'').trim();
     if(manual) return /^cook(s)?$/i.test(manual)?'DTY':manual;
     const p=String(a.position||'').toLowerCase();
+    if(/sunshine\s*aide/.test(p)) return 'Sunshine Aide';
     if(/\bnat\b|nurse aide trainee|nursing assistant trainee/.test(p)) return 'NAT';
     if(/\bhsk\b|housekeep/.test(p)) return 'HSK';
     if(/\bdty\b|diet|cook|food service/.test(p)) return 'DTY';
@@ -306,7 +307,7 @@ function refreshOptions() {
     $('stageFilter').innerHTML = '<option value="">All stages</option>' + stages.map(x => `<option>${esc(x)}</option>`).join('');
     $('positionFilter').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
     $('printPosition').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
-    const departments=[...new Set(['CNA','Nursing','HSK','DTY','NAT','Activities','Maintenance','Laundry','Social Services','Therapy','Other',...applicants.map(applicantDepartment)])];
+    const departments=[...new Set(['CNA','Nursing','HSK','DTY','NAT','Sunshine Aide','Activities','Maintenance','Laundry','Social Services','Therapy','Other',...applicants.map(applicantDepartment)])];
     $('printDepartment').innerHTML='<option value="">All departments</option>'+departments.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
     $('stageFilter').value = selectedStage; $('positionFilter').value = selectedPosition; $('printPosition').value = selectedPrint; $('printDepartment').value = selectedDept;
 }
