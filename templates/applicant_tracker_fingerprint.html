@@ -192,6 +192,15 @@ function businessDaysElapsed(startValue, endValue = new Date()) {
     return count;
 }
 
+function fifthBusinessDay(startValue) {
+    if (!startValue) return '';
+    const d = new Date(startValue+'T12:00:00');
+    if (Number.isNaN(d.getTime())) return '';
+    let n=0;
+    while(n<5) { d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)n++; }
+    return d.toLocaleDateString();
+}
+
 function loadApplicants() {
     try { const value = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(value) ? value : []; }
     catch { return []; }
@@ -211,9 +220,17 @@ function statusFor(a) {
     if (a.manualClose) return ['Closed—' + a.manualClose, 'Application closed', 'closed'];
     if (a.backgroundReview === 'Applicant Documentation Needed') return ['Applicant Documentation Needed', 'Applicant must send conviction information', 'attention'];
     if (a.backgroundReview === 'Management Review Required') return ['Management Review Required', 'Send to management for decision', 'attention'];
-    if (a.managementDecision === 'Do Not Hire' && !a.finalAdverseSentDate) return ['Final Adverse Notice Required', 'Complete the final adverse-action process', 'attention'];
     if (a.finalAdverseSentDate) return ['Closed—Background Decision', 'Final adverse notice recorded', 'closed'];
-    if (a.backgroundReview === 'Pre-Adverse Action Process' || a.preAdverseSentDate) return ['Pre-Adverse Action Process', 'Allow review and record applicant response', 'attention'];
+    if (a.preAdverseSentDate) {
+        const elapsed=businessDaysElapsed(a.preAdverseSentDate);
+        const due=fifthBusinessDay(a.preAdverseSentDate);
+        if(elapsed<5) return ['AD-303 Waiting Period', (5-elapsed)+' weekday(s) remaining; earliest weekday review '+due+' (verify holidays)', 'attention'];
+        if(a.managementDecision==='Do Not Hire') return ['AD-304 — Review to Send', 'Five weekdays elapsed; confirm holidays, applicant response and Administrator approval before sending', 'attention'];
+        if(a.managementDecision==='Cleared to Continue') return ['Cleared After Review', 'Continue hiring process; AD-304 not needed', 'done'];
+        return ['AD-303 — Decision Pending', 'Five weekdays elapsed; Administrator to review applicant response and decide next action', 'attention'];
+    }
+    if (a.managementDecision === 'Do Not Hire') return ['AD-303 Required', 'Complete and send AD-303 before final adverse action', 'attention'];
+    if (a.backgroundReview === 'Pre-Adverse Action Process') return ['AD-303 Required', 'Send AD-303 and record the actual sent date', 'attention'];
     if (a.fingerprintResult === 'Record Found') return ['Background Review Needed', 'Select the correct follow-up', 'attention'];
     if (a.fingerprintResult === 'Clear' && a.fingerprintReceipt === 'Received') {
         if (!a.offerSentDate) return ['Ready for Offer', 'Enter pay and orientation date; send offer', 'done'];
