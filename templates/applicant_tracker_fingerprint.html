@@ -201,6 +201,27 @@ function fifthBusinessDay(startValue) {
     return d.toLocaleDateString();
 }
 
+function adverseReviewDate(startValue) {
+    if (!startValue) return null;
+    const base=new Date(startValue+'T12:00:00');
+    if(Number.isNaN(base.getTime()))return null;
+    const eight=new Date(base);eight.setDate(eight.getDate()+8);
+    const five=new Date(base);let n=0;
+    while(n<5){five.setDate(five.getDate()+1);if(five.getDay()!==0&&five.getDay()!==6)n++;}
+    let result=eight>five?eight:five;
+    result=new Date(result);
+    while(result.getDay()===0||result.getDay()===6)result.setDate(result.getDate()+1);
+    return result;
+}
+function adverseReviewDateText(startValue){
+    const d=adverseReviewDate(startValue);
+    return d?d.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}):'';
+}
+function adverseReviewReady(startValue){
+    const d=adverseReviewDate(startValue);
+    const now=new Date();now.setHours(12,0,0,0);
+    return !!d&&now>=d&&businessDaysElapsed(startValue)>=5;
+}
 function loadApplicants() {
     try { const value = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(value) ? value : []; }
     catch { return []; }
@@ -222,12 +243,11 @@ function statusFor(a) {
     if (a.backgroundReview === 'Management Review Required') return ['Management Review Required', 'Send to management for decision', 'attention'];
     if (a.finalAdverseSentDate) return ['Closed—Background Decision', 'Final adverse notice recorded', 'closed'];
     if (a.preAdverseSentDate) {
-        const elapsed=businessDaysElapsed(a.preAdverseSentDate);
-        const due=fifthBusinessDay(a.preAdverseSentDate);
-        if(elapsed<5) return ['AD-303 Waiting Period', (5-elapsed)+' weekday(s) remaining; earliest weekday review '+due+' (verify holidays)', 'attention'];
-        if(a.managementDecision==='Do Not Hire') return ['AD-304 — Review to Send', 'Five weekdays elapsed; confirm holidays, applicant response and Administrator approval before sending', 'attention'];
+        const due=adverseReviewDateText(a.preAdverseSentDate);
         if(a.managementDecision==='Cleared to Continue') return ['Cleared After Review', 'Continue hiring process; AD-304 not needed', 'done'];
-        return ['AD-303 — Decision Pending', 'Five weekdays elapsed; Administrator to review applicant response and decide next action', 'attention'];
+        if(!adverseReviewReady(a.preAdverseSentDate)) return ['AD-303 Waiting Period', 'AD-304 review date: '+due+' (8-day buffer / at least 5 weekdays; verify holidays)', 'attention'];
+        if(a.managementDecision==='Do Not Hire') return ['AD-304 — Review to Send', 'Review date '+due+' reached; verify holidays, disputes and Administrator approval', 'attention'];
+        return ['AD-303 — Decision Pending', 'AD-304 review date '+due+' reached; Administrator decision required', 'attention'];
     }
     if (a.managementDecision === 'Do Not Hire') return ['AD-303 Required', 'Complete and send AD-303 before final adverse action', 'attention'];
     if (a.backgroundReview === 'Pre-Adverse Action Process') return ['AD-303 Required', 'Send AD-303 and record the actual sent date', 'attention'];
@@ -457,8 +477,8 @@ window.showEmailMenu = id => {
             return;
         }
         const elapsed = businessDaysElapsed(a.preAdverseSentDate);
-        if (elapsed < 5) {
-            alert(`STOP: Only ${elapsed} business day${elapsed === 1 ? '' : 's'} have elapsed since AD-303. Company policy considers 5 business days a reasonable amount of time before final adverse action.`);
+        if (!adverseReviewReady(a.preAdverseSentDate)) {
+            alert(`STOP: AD-304 review date is ${adverseReviewDateText(a.preAdverseSentDate)}. At least five business days and the eight-calendar-day buffer must pass; also verify holidays.`);
             return;
         }
     }
@@ -658,7 +678,7 @@ async function printAdverseForms(id) {
         alert('Record the background review requiring AD-303 before preparing the letter.');return;
     }
     if(which==='304') {
-        if(a.managementDecision!=='Do Not Hire'||!a.preAdverseSentDate||businessDaysElapsed(a.preAdverseSentDate)<5) {
+        if(a.managementDecision!=='Do Not Hire'||!a.preAdverseSentDate||!adverseReviewReady(a.preAdverseSentDate)) {
             alert('AD-304 requires a Do Not Hire decision and five business days after the recorded AD-303 notice. Independently verify holidays, any dispute and Administrator approval.');return;
         }
         if(!a.agencyName||!a.agencyAddress||!a.agencyPhone) {
