@@ -108,7 +108,7 @@
             <div><label for="name">Applicant name *</label><input id="name" required></div>
             <div><label for="phone">Phone number</label><input id="phone" type="tel"></div>
             <div><label for="email">Email *</label><input id="email" type="email" required></div>
-            <div><label for="position">Position *</label><input id="position" required></div>
+            <div><label for="position">Position *</label><input id="position" required></div><div><label for="department">Department</label><select id="department"><option value="">Select department</option><option>CNA</option><option>Nursing</option><option>HSK</option><option>DTY</option><option>NAT</option><option>Activities</option><option>Maintenance</option><option>Laundry</option><option>Social Services</option><option>Therapy</option><option>Other</option></select></div>
             <div><label for="shift">Shift</label><input id="shift" placeholder="Example: 6–2"></div><div class="span-2"><label for="applicantStreet">Applicant mailing street address</label><input id="applicantStreet" autocomplete="street-address"></div><div><label for="applicantCity">City</label><input id="applicantCity"></div><div><label for="applicantState">State</label><input id="applicantState" value="LA" maxlength="2"></div><div><label for="applicantZip">ZIP code</label><input id="applicantZip" maxlength="10"></div>
 
             <h3 class="section-title">Fingerprint screening</h3>
@@ -156,7 +156,7 @@
 <dialog id="printDialog">
     <div class="dialog-head"><h2>Supervisor Update</h2><button type="button" class="light" id="closePrint">Close</button></div>
     <div class="dialog-body grid">
-        <div><label for="printPosition">Position</label><select id="printPosition"><option value="">All positions</option></select></div>
+        <div><label for="printDepartment">Department</label><select id="printDepartment"><option value="">All departments</option></select></div><div><label for="printPosition">Position</label><select id="printPosition"><option value="">All positions</option></select></div>
         <div><label for="printTitle">Page title</label><input id="printTitle" value="Applicant Status Report"></div>
         <div style="align-self:end"><button id="runPrint" type="button">Print Applicant Status Report</button></div>
     </div>
@@ -167,7 +167,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 const STORAGE_KEY = 'landmarkFingerprintApplicantTrackerV1';
-const fields = ['name','phone','email','position','shift','applicantStreet','applicantCity','applicantState','applicantZip','agencyName','agencyAddress','agencyPhone','administratorName','facilityLegalName','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
+const fields = ['name','phone','email','position','department','shift','applicantStreet','applicantCity','applicantState','applicantZip','agencyName','agencyAddress','agencyPhone','administratorName','facilityLegalName','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
 let applicants = loadApplicants();
 let emailDraft = null;
 
@@ -285,14 +285,30 @@ function render() {
     refreshOptions();
 }
 
+function applicantDepartment(a) {
+    const manual=String(a.department||'').trim();
+    if(manual) return /^cook(s)?$/i.test(manual)?'DTY':manual;
+    const p=String(a.position||'').toLowerCase();
+    if(/\bnat\b|nurse aide trainee|nursing assistant trainee/.test(p)) return 'NAT';
+    if(/\bhsk\b|housekeep/.test(p)) return 'HSK';
+    if(/\bdty\b|diet|cook|food service/.test(p)) return 'DTY';
+    if(/\bcna\b|certified nursing assistant/.test(p)) return 'CNA';
+    if(/\blpn\b|\brn\b|nurse/.test(p)) return 'Nursing';
+    if(/activit/.test(p)) return 'Activities';
+    if(/laundry/.test(p)) return 'Laundry';
+    if(/maintenance/.test(p)) return 'Maintenance';
+    return 'Other';
+}
 function refreshOptions() {
-    const selectedStage = $('stageFilter').value, selectedPosition = $('positionFilter').value, selectedPrint = $('printPosition').value;
+    const selectedStage = $('stageFilter').value, selectedPosition = $('positionFilter').value, selectedPrint = $('printPosition').value, selectedDept = $('printDepartment').value;
     const stages = [...new Set(applicants.map(a => statusFor(a)[0]))].sort();
     const positions = [...new Set(applicants.map(a => a.position).filter(Boolean))].sort();
     $('stageFilter').innerHTML = '<option value="">All stages</option>' + stages.map(x => `<option>${esc(x)}</option>`).join('');
     $('positionFilter').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
     $('printPosition').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
-    $('stageFilter').value = selectedStage; $('positionFilter').value = selectedPosition; $('printPosition').value = selectedPrint;
+    const departments=[...new Set(['CNA','Nursing','HSK','DTY','NAT','Activities','Maintenance','Laundry','Social Services','Therapy','Other',...applicants.map(applicantDepartment)])];
+    $('printDepartment').innerHTML='<option value="">All departments</option>'+departments.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+    $('stageFilter').value = selectedStage; $('positionFilter').value = selectedPosition; $('printPosition').value = selectedPrint; $('printDepartment').value = selectedDept;
 }
 
 function openNew() {
@@ -560,6 +576,13 @@ $('importFile').onchange = async e => {
 // Supervisor-facing status names deliberately omit confidential screening findings.
 function supervisorStatus(a) {
     const [internal, next] = statusFor(a);
+    // The printed stage is driven by today's HR status, never a separately stored or stale stage.
+    // Protect confidential background findings on supervisor copies.
+    if (/AD-303|AD-304|Pre-Adverse|Background Review|Management Review|Applicant Documentation|Cleared After Review|Final Adverse|Closed—Background/.test(internal)) {
+        if (internal==='Closed—Background Decision') return ['Not Selected','Application closed','closed'];
+        if (internal==='Cleared After Review') return ['Under Review','HR completing next hiring step','progress'];
+        return ['Under Review','HR reviewing application; update pending','progress'];
+    }
     if (internal === 'Hired') return ['Hired', 'Hiring process completed', 'hired'];
     if (internal.startsWith('Closed') || internal === 'Offer Declined') {
         const reason = (a.manualClose || '').toLowerCase();
@@ -576,10 +599,10 @@ function supervisorStatus(a) {
     if (internal === 'Ready for Offer' || internal === 'Offer Accepted') {
         return ['Ready for Orientation', internal === 'Ready for Offer' ? 'HR preparing offer' : 'Schedule orientation', 'orientation'];
     }
-    if (internal === 'Needs New Orientation Date') return ['Action Needed', 'Reschedule orientation', 'attention'];
-    if (internal === 'Offer Sent—Waiting for Reply') return ['Action Needed', 'Await applicant response', 'attention'];
-    if (internal === 'Fingerprint Appointment Scheduled') return ['Fingerprint Scheduled', 'Await scheduled appointment', 'progress'];
-    if (internal === 'Fingerprint Results Pending') return ['Background Pending', 'HR awaiting screening completion', 'progress'];
+    if (internal === 'Needs New Orientation Date') return ['Needs New Orientation Date', 'Reschedule orientation', 'attention'];
+    if (internal === 'Offer Sent—Waiting for Reply') return ['Offer Sent—Waiting for Reply', 'Await applicant response', 'attention'];
+    if (internal === 'Fingerprint Appointment Scheduled') return ['Fingerprint Appointment Scheduled', 'Await scheduled appointment', 'progress'];
+    if (internal === 'Fingerprint Results Pending') return ['Fingerprint Results Pending', 'HR awaiting screening completion', 'progress'];
     if (internal === 'Application Received') return ['Application Received', 'HR processing application', 'attention'];
     // Screening or adverse-action details must stay on the HR-only tracker.
     return ['Under Review', 'HR reviewing application', 'progress'];
@@ -593,10 +616,11 @@ const supervisorSections = [
 ];
 const supervisorKey = [
     ['Application Received','Application received; HR processing'],
-    ['Fingerprint Scheduled','Fingerprint appointment scheduled'],
-    ['Background Pending','Screening in progress'],
+    ['Fingerprint Appointment Scheduled','Fingerprint appointment scheduled'],
+    ['Fingerprint Results Pending','Screening in progress'],
     ['Under Review','HR reviewing eligibility or requirements'],
-    ['Action Needed','An applicant or HR follow-up is outstanding'],
+    ['Needs New Orientation Date','Orientation needs rescheduling'],
+    ['Offer Sent—Waiting for Reply','Awaiting response to offer'],
     ['Ready for Orientation','HR preparing the next hiring step'],
     ['Orientation Scheduled','Orientation date assigned'],
     ['Withdrawn','Applicant declined or withdrew'],
@@ -607,7 +631,8 @@ const supervisorKey = [
 ];
 $('runPrint').onclick = () => {
     const position = $('printPosition').value;
-    const rows = applicants.filter(a => !position || a.position === position);
+    const department = $('printDepartment').value;
+    const rows = applicants.filter(a => (!position || a.position === position) && (!department || applicantDepartment(a) === department));
     const order = {attention:0, progress:1, orientation:2, closed:3, hired:4};
     const sorted = [...rows].sort((a,b) =>
         (order[supervisorStatus(a)[2]] ?? 9) - (order[supervisorStatus(b)[2]] ?? 9) ||
@@ -618,7 +643,7 @@ $('runPrint').onclick = () => {
         return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(status)}</td><td>${esc(next)}</td></tr>`;
     }).join('');
     $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Report')}</h1>
-        <div class="print-date">Printed ${esc(printTimestampText())}${position ? ' — ' + esc(position) : ' — All positions'}</div>
+        <div class="print-date">Printed ${esc(printTimestampText())}${department ? ' — ' + esc(department) : ' — All departments'}${position ? ' — ' + esc(position) : ''}</div>
         <table class="applicant-print-table">${tableHeaders}<tbody>${applicantRows || '<tr><td colspan="5">No applicants to display.</td></tr>'}</tbody></table>
         <section class="print-key"><h2>Applicant Status Key</h2><div class="key-items">${supervisorKey.map(([status,meaning])=>`<span><strong>${esc(status)}:</strong> ${esc(meaning)}</span>`).join('')}</div><p>Statuses reflect information available to Human Resources as of the report date. Confidential screening and employment records remain with HR.</p></section>`;
     $('printDialog').close();
