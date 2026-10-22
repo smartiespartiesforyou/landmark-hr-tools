@@ -81,7 +81,7 @@
         <button class="secondary" id="printBtn">Print Supervisor Update</button>
         <button class="light" id="exportBtn">Export Backup</button>
         <label class="button light" style="display:inline-block;margin:0">Import Backup<input id="importFile" type="file" accept="application/json" hidden></label>
-        <span id="saveMessage" class="hint" aria-live="polite"></span>
+        <span id="saveMessage" class="hint" aria-live="polite"></span><div style="width:100%;border-top:1px solid #ddd;padding-top:12px"><strong>Official Corporate PDF Forms (one-time setup on this browser)</strong><p class="hint">Choose the original writable PDFs you supplied. The tracker stores these blank forms on this computer, not on the server. Neither corporate layout nor wording is changed.</p><label>Original AD-303 (6 pages) <input type="file" id="officialPdf303" accept=".pdf,application/pdf"></label><small id="formStatus303"></small><label>Original AD-304 (1 page) <input type="file" id="officialPdf304" accept=".pdf,application/pdf"></label><small id="formStatus304"></small></div>
     </div>
 
     <div class="card filters">
@@ -164,6 +164,7 @@
 
 <div id="printArea"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 const STORAGE_KEY = 'landmarkFingerprintApplicantTrackerV1';
 const fields = ['name','phone','email','position','shift','applicantStreet','applicantCity','applicantState','applicantZip','agencyName','agencyAddress','agencyPhone','administratorName','facilityLegalName','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
@@ -586,56 +587,107 @@ $('runPrint').onclick = () => {
 };
 
 
-function printAdverseForms(id) {
-    const a = applicants.find(x => x.id === id);
-    if (!a) return;
-    const which = prompt('Enter 303 to prepare the pre-adverse letter, or 304 for the final adverse letter:');
-    if (!['303','304'].includes(which)) return;
-    if (!a.applicantStreet || !a.applicantCity || !a.applicantState || !a.applicantZip) {
-        alert('Open Update and enter the applicant mailing address before printing.'); return;
+
+const OFFICIAL_FORMS_DB = 'landmarkOfficialAdverseForms';
+function officialFormDb() {
+    return new Promise((resolve,reject) => {
+        const req = indexedDB.open(OFFICIAL_FORMS_DB,1);
+        req.onupgradeneeded = () => req.result.createObjectStore('forms');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+async function officialFormStore(key, bytes) {
+    const db = await officialFormDb();
+    return new Promise((resolve,reject) => {
+        const tx = db.transaction('forms','readwrite');
+        tx.objectStore('forms').put(bytes,key);
+        tx.oncomplete = () => {db.close();resolve();};
+        tx.onerror = () => {db.close();reject(tx.error);};
+    });
+}
+async function officialFormRead(key) {
+    const db = await officialFormDb();
+    return new Promise((resolve,reject) => {
+        const tx=db.transaction('forms','readonly'), req=tx.objectStore('forms').get(key);
+        req.onsuccess=()=>{db.close();resolve(req.result);};
+        req.onerror=()=>{db.close();reject(req.error);};
+    });
+}
+for (const code of ['303','304']) {
+    $('officialPdf'+code).addEventListener('change',async e => {
+        const file=e.target.files[0]; if (!file) return;
+        try {
+            const bytes=new Uint8Array(await file.arrayBuffer());
+            if (new TextDecoder().decode(bytes.slice(0,5))!=='%PDF-') throw Error('Select the original corporate PDF.');
+            const pdf=await PDFLib.PDFDocument.load(bytes);
+            if (pdf.getPageCount()!==(code==='303'?6:1)) throw Error('Incorrect number of pages for AD-'+code+'.');
+            const names=pdf.getForm().getFields().map(f=>f.getName());
+            if (!names.includes('Date')||!names.includes('City State Zip')) throw Error('This does not appear to be the original writable form.');
+            await officialFormStore(code,bytes);
+            $('formStatus'+code).textContent='Original AD-'+code+' saved on this browser.';
+        } catch(err) { alert('Could not save AD-'+code+': '+err.message); }
+        e.target.value='';
+    });
+}
+async function printAdverseForms(id) {
+    const a=applicants.find(x=>x.id===id); if(!a)return;
+    const which=prompt('Enter 303 for the original pre-adverse PDF or 304 for the original final adverse PDF:');
+    if(!['303','304'].includes(which))return;
+    if(!a.applicantStreet||!a.applicantCity||!a.applicantState||!a.applicantZip) {
+        alert('First open Update and complete the applicant mailing address.');return;
     }
-    if (which === '304') {
-        if (a.managementDecision !== 'Do Not Hire' || !a.preAdverseSentDate || businessDaysElapsed(a.preAdverseSentDate) < 5) {
-            alert('AD-304 is unavailable until the Administrator has recorded Do Not Hire and five business days have elapsed after the AD-303 notice. Confirm holidays and any applicant dispute separately.'); return;
+    if(which==='303' && a.fingerprintResult!=='Record Found' && !['Management Review Required','Pre-Adverse Action Process'].includes(a.backgroundReview)) {
+        alert('Record the background review requiring AD-303 before preparing the letter.');return;
+    }
+    if(which==='304') {
+        if(a.managementDecision!=='Do Not Hire'||!a.preAdverseSentDate||businessDaysElapsed(a.preAdverseSentDate)<5) {
+            alert('AD-304 requires a Do Not Hire decision and five business days after the recorded AD-303 notice. Independently verify holidays, any dispute and Administrator approval.');return;
         }
-        if (!a.agencyName || !a.agencyAddress || !a.agencyPhone) {
-            alert('Enter and verify the consumer reporting agency name, address and phone against the report before preparing AD-304.'); return;
+        if(!a.agencyName||!a.agencyAddress||!a.agencyPhone) {
+            alert('Enter the consumer reporting agency name, mailing address and phone exactly as verified for this report.');return;
         }
     }
-    if (which === '303' && !['Record Found'].includes(a.fingerprintResult) && !['Management Review Required','Pre-Adverse Action Process'].includes(a.backgroundReview)) {
-        alert('Record the background review requiring pre-adverse action first.'); return;
+    try {
+        const original=await officialFormRead(which);
+        if(!original) {alert('First select the original AD-'+which+' PDF in the Official Corporate PDF Forms section at the top of this page. It will be saved on this browser.');return;}
+        const pdf=await PDFLib.PDFDocument.load(original.slice());
+        const form=pdf.getForm();
+        const set=(key,value)=>{
+            if(value===undefined||value===null||value==='')return;
+            const field=form.getTextField(key);
+            field.setText(String(value));
+        };
+        const localDate=new Date().toLocaleDateString('en-US');
+        set('Date',localDate);
+        set('Name',a.name);
+        set('Address',a.applicantStreet);
+        set('City State Zip',a.applicantCity+', '+a.applicantState+' '+a.applicantZip);
+        set('Dear',a.name);
+        if(which==='303') {
+            set('As you are aware part of',a.facilityLegalName||'Landmark South Nursing and Rehabilitation Center');
+            form.getCheckBox('Check Box4').check();
+        } else {
+            const lines=[a.agencyName,a.agencyAddress,a.agencyPhone].filter(Boolean);
+            const keys=[
+                'report which we obtained from the consumer reporting agency listed below 1',
+                'report which we obtained from the consumer reporting agency listed below 2',
+                'report which we obtained from the consumer reporting agency listed below 3',
+                'report which we obtained from the consumer reporting agency listed below 4'
+            ];
+            lines.forEach((line,i)=>{if(i<keys.length)set(keys[i],line);});
+            form.getCheckBox('Check Box4').check();
+            form.getCheckBox('Check Box6').check();
+        }
+        const bytes=await pdf.save();
+        const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+        const link=document.createElement('a');link.href=url;link.download='AD-'+which+'_'+(a.name||'Applicant').replace(/[^a-z0-9 -]/gi,'').replace(/ +/g,'_')+'.pdf';
+        document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+        if(which==='303') alert('Original six-page AD-303 downloaded, including its FCRA rights pages. Review all fields, obtain Administrator signature, attach the applicable consumer report and record the actual date sent.');
+        else alert('Original AD-304 downloaded. Verify the reporting agency details, review with the Administrator and record the actual date sent.');
+    } catch(err) {
+        alert('The original form could not be filled: '+err.message+'. Please confirm you selected the original writable PDF and try again.');
     }
-    const date = new Date().toLocaleDateString();
-    const facility = esc(a.facilityLegalName || 'Landmark South Nursing and Rehabilitation Center');
-    const name = esc(a.name);
-    const address = esc(a.applicantStreet) + '<br>' + esc(a.applicantCity) + ', ' + esc(a.applicantState) + ' ' + esc(a.applicantZip);
-    const common = '<p>Date: ' + date + '</p><p>' + name + '<br>' + address + '</p><p>Dear ' + name + ',</p>';
-    const signature = '<p>Sincerely,</p><p style="margin-top:42px">_______________________________________<br>Administrator' + (a.administratorName ? ' — ' + esc(a.administratorName) : '') + '</p>';
-    let letter = '';
-    if (which === '303') {
-        letter = '<h1>PRE-ADVERSE ACTION LETTER</h1>' + common +
-        '<p>As you are aware, part of ' + facility + '’s hiring procedure and employment practices are to review a consumer report for job applicants and for employees. You authorized this review by signing a “Disclosure and Authorization” form.</p>' +
-        '<p>Please be advised that your <strong>☒ application for employment</strong> &nbsp; ☐ continued employment may be impacted adversely by the information contained in your consumer report. Enclosed is a copy of your consumer report. Also enclosed is a Summary of Rights under the Fair Credit Reporting Act.</p>' +
-        '<p>Please notify me immediately if you believe any information contained in the enclosed consumer report is incorrect.</p>' + signature +
-        '<p style="text-align:right;font-size:10pt">AD-303 (02/22) — Letter only</p>' +
-        '<p style="border:1px solid #555;padding:10px;font-size:10pt"><strong>IMPORTANT:</strong> The original AD-303 is six pages. This generated letter does NOT contain the FCRA Summary of Rights. Attach the original rights summary AND the applicable consumer report before delivery. Record the actual sent date on the applicant record. Obtain Administrator review/signature.</p>';
-    } else {
-        letter = '<h1>ADVERSE ACTION LETTER</h1>' + common +
-        '<p>☒ Your application for employment has been denied.</p><p>☐ Your employment is being terminated effective __________.</p>' +
-        '<p>This decision was based in whole or in part on information obtained in a consumer report which we obtained from the consumer reporting agency listed below:</p>' +
-        '<p>' + esc(a.agencyName) + '<br>' + esc(a.agencyAddress) + '<br>' + esc(a.agencyPhone) + '</p>' +
-        '<p>The consumer reporting agency played no part in this decision and is unable to supply specific reasons why your</p>' +
-        '<p>☒ application for employment has been denied.<br>☐ employment is being terminated.</p>' +
-        '<p>You do, however, have a right under the Fair Credit Reporting Act to know the information contained in your file at the consumer reporting agency who furnished your consumer report. You are entitled to a free copy of your agency within 60 days of the receipt of this notice. You also have the right to dispute with the reporting agency the accuracy or completeness of any information in the report.</p>' +
-        '<p>If you have any questions regarding this letter, you should contact me at the Facility.</p>' + signature +
-        '<p style="text-align:right;font-size:10pt">AD-304 (09/13) — Verify details and obtain Administrator signature</p>';
-    }
-    const html = '<!doctype html><html><head><title>AD-' + which + ' — ' + name + '</title><style>@page{size:letter;margin:0.7in}body{font:12pt "Times New Roman",serif;line-height:1.5;color:black}h1{text-align:center;font-size:16pt;margin-bottom:35px}p{margin:18px 0}@media screen{body{max-width:760px;margin:36px auto}.printbutton{display:block}}@media print{.printbutton{display:none}}</style></head><body><button class="printbutton" onclick="window.print()">Print / Save as PDF</button>' + letter + '</body></html>';
-    const blob = new Blob([html], {type:'text/html'});
-    const url = URL.createObjectURL(blob);
-    const tab = window.open(url, '_blank', 'noopener');
-    if (!tab) alert('Allow pop-ups for this site to open the prepared letter.');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 window.printAdverseForms = printAdverseForms;
 
