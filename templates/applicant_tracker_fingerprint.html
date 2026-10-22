@@ -264,7 +264,7 @@ function statusFor(a) {
         return ['Offer Accepted', 'Schedule orientation', 'done'];
     }
     if (a.fingerprintCompleted === 'Yes') return ['Fingerprint Results Pending', 'Confirm receipt and review fingerprint results', ''];
-    if (a.fingerprintAppointmentDate) return ['Fingerprint Appointment Scheduled', 'Confirm appointment completed and collect receipt', 'attention'];
+    if (a.fingerprintAppointmentDate) return ['Fingerprint Appointment Scheduled', 'Fingerprint appointment: ' + fmtDate(a.fingerprintAppointmentDate), 'attention'];
     return ['Application Received', 'Schedule fingerprint appointment', ''];
 }
 
@@ -601,7 +601,7 @@ function supervisorStatus(a) {
     }
     if (internal === 'Needs New Orientation Date') return ['Needs New Orientation Date', 'Reschedule orientation', 'attention'];
     if (internal === 'Offer Sent—Waiting for Reply') return ['Offer Sent—Waiting for Reply', 'Await applicant response', 'attention'];
-    if (internal === 'Fingerprint Appointment Scheduled') return ['Fingerprint Appointment Scheduled', 'Await scheduled appointment', 'progress'];
+    if (internal === 'Fingerprint Appointment Scheduled') return ['Fingerprint Appointment Scheduled', a.fingerprintAppointmentDate ? 'Fingerprint appointment: ' + fmtDate(a.fingerprintAppointmentDate) : 'Appointment date not entered', 'progress'];
     if (internal === 'Fingerprint Results Pending') return ['Fingerprint Results Pending', 'HR awaiting screening completion', 'progress'];
     if (internal === 'Application Received') return ['Application Received', 'HR processing application', 'attention'];
     // Screening or adverse-action details must stay on the HR-only tracker.
