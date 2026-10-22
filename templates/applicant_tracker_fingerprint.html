@@ -109,7 +109,7 @@
             <div><label for="phone">Phone number</label><input id="phone" type="tel"></div>
             <div><label for="email">Email *</label><input id="email" type="email" required></div>
             <div><label for="position">Position *</label><input id="position" required></div>
-            <div><label for="shift">Shift</label><input id="shift" placeholder="Example: 6–2"></div>
+            <div><label for="shift">Shift</label><input id="shift" placeholder="Example: 6–2"></div><div class="span-2"><label for="applicantStreet">Applicant mailing street address</label><input id="applicantStreet" autocomplete="street-address"></div><div><label for="applicantCity">City</label><input id="applicantCity"></div><div><label for="applicantState">State</label><input id="applicantState" value="LA" maxlength="2"></div><div><label for="applicantZip">ZIP code</label><input id="applicantZip" maxlength="10"></div>
 
             <h3 class="section-title">Fingerprint screening</h3>
             <div><label for="fingerprintAppointmentDate">Fingerprint appointment date</label><input id="fingerprintAppointmentDate" type="date"></div>
@@ -120,7 +120,7 @@
             <div><label for="preAdverseSentDate">Pre-adverse notice sent</label><input id="preAdverseSentDate" type="date"></div>
             <div><label for="backgroundResponse">Applicant response</label><select id="backgroundResponse"><option value="">Not applicable / Pending</option><option>Received</option><option>No Response</option></select></div>
             <div><label for="managementDecision">Management decision</label><select id="managementDecision"><option value="">Pending</option><option>Cleared to Continue</option><option>Do Not Hire</option></select></div>
-            <div><label for="finalAdverseSentDate">Final adverse notice sent</label><input id="finalAdverseSentDate" type="date"></div>
+            <div><label for="finalAdverseSentDate">Final adverse notice sent</label><input id="finalAdverseSentDate" type="date"></div><div class="span-2"><label for="agencyName">Consumer reporting agency (verify against report)</label><input id="agencyName" placeholder="Louisiana State Police — BCII-LCJIS"></div><div class="span-2"><label for="agencyAddress">Reporting agency mailing address</label><input id="agencyAddress" placeholder="P.O. Box 66614, Box A-6, Baton Rouge, LA 70896"></div><div><label for="agencyPhone">Reporting agency telephone</label><input id="agencyPhone" placeholder="(225) 925-6095"></div><div><label for="administratorName">Administrator name (for signature)</label><input id="administratorName"></div><div class="span-2"><label for="facilityLegalName">Facility name</label><input id="facilityLegalName" value="Landmark South Nursing and Rehabilitation Center"></div>
 
             <h3 class="section-title">Offer</h3>
             <div><label for="payRate">Pay rate</label><input id="payRate" inputmode="decimal" placeholder="Example: 17.00"></div>
@@ -166,7 +166,7 @@
 
 <script>
 const STORAGE_KEY = 'landmarkFingerprintApplicantTrackerV1';
-const fields = ['name','phone','email','position','shift','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
+const fields = ['name','phone','email','position','shift','applicantStreet','applicantCity','applicantState','applicantZip','agencyName','agencyAddress','agencyPhone','administratorName','facilityLegalName','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
 let applicants = loadApplicants();
 let emailDraft = null;
 
@@ -240,7 +240,7 @@ function render() {
 
     $('applicantRows').innerHTML = visible.length ? visible.map(a => {
         const [status,next,klass] = statusFor(a);
-        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
+        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="secondary" onclick="printAdverseForms('${a.id}')">AD-303 / AD-304</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
     }).join('') : '<tr><td colspan="6">No applicants match this view.</td></tr>';
     refreshOptions();
 }
@@ -584,6 +584,60 @@ $('runPrint').onclick = () => {
     $('printDialog').close();
     window.print();
 };
+
+
+function printAdverseForms(id) {
+    const a = applicants.find(x => x.id === id);
+    if (!a) return;
+    const which = prompt('Enter 303 to prepare the pre-adverse letter, or 304 for the final adverse letter:');
+    if (!['303','304'].includes(which)) return;
+    if (!a.applicantStreet || !a.applicantCity || !a.applicantState || !a.applicantZip) {
+        alert('Open Update and enter the applicant mailing address before printing.'); return;
+    }
+    if (which === '304') {
+        if (a.managementDecision !== 'Do Not Hire' || !a.preAdverseSentDate || businessDaysElapsed(a.preAdverseSentDate) < 5) {
+            alert('AD-304 is unavailable until the Administrator has recorded Do Not Hire and five business days have elapsed after the AD-303 notice. Confirm holidays and any applicant dispute separately.'); return;
+        }
+        if (!a.agencyName || !a.agencyAddress || !a.agencyPhone) {
+            alert('Enter and verify the consumer reporting agency name, address and phone against the report before preparing AD-304.'); return;
+        }
+    }
+    if (which === '303' && !['Record Found'].includes(a.fingerprintResult) && !['Management Review Required','Pre-Adverse Action Process'].includes(a.backgroundReview)) {
+        alert('Record the background review requiring pre-adverse action first.'); return;
+    }
+    const date = new Date().toLocaleDateString();
+    const facility = esc(a.facilityLegalName || 'Landmark South Nursing and Rehabilitation Center');
+    const name = esc(a.name);
+    const address = esc(a.applicantStreet) + '<br>' + esc(a.applicantCity) + ', ' + esc(a.applicantState) + ' ' + esc(a.applicantZip);
+    const common = '<p>Date: ' + date + '</p><p>' + name + '<br>' + address + '</p><p>Dear ' + name + ',</p>';
+    const signature = '<p>Sincerely,</p><p style="margin-top:42px">_______________________________________<br>Administrator' + (a.administratorName ? ' — ' + esc(a.administratorName) : '') + '</p>';
+    let letter = '';
+    if (which === '303') {
+        letter = '<h1>PRE-ADVERSE ACTION LETTER</h1>' + common +
+        '<p>As you are aware, part of ' + facility + '’s hiring procedure and employment practices are to review a consumer report for job applicants and for employees. You authorized this review by signing a “Disclosure and Authorization” form.</p>' +
+        '<p>Please be advised that your <strong>☒ application for employment</strong> &nbsp; ☐ continued employment may be impacted adversely by the information contained in your consumer report. Enclosed is a copy of your consumer report. Also enclosed is a Summary of Rights under the Fair Credit Reporting Act.</p>' +
+        '<p>Please notify me immediately if you believe any information contained in the enclosed consumer report is incorrect.</p>' + signature +
+        '<p style="text-align:right;font-size:10pt">AD-303 (02/22) — Letter only</p>' +
+        '<p style="border:1px solid #555;padding:10px;font-size:10pt"><strong>IMPORTANT:</strong> The original AD-303 is six pages. This generated letter does NOT contain the FCRA Summary of Rights. Attach the original rights summary AND the applicable consumer report before delivery. Record the actual sent date on the applicant record. Obtain Administrator review/signature.</p>';
+    } else {
+        letter = '<h1>ADVERSE ACTION LETTER</h1>' + common +
+        '<p>☒ Your application for employment has been denied.</p><p>☐ Your employment is being terminated effective __________.</p>' +
+        '<p>This decision was based in whole or in part on information obtained in a consumer report which we obtained from the consumer reporting agency listed below:</p>' +
+        '<p>' + esc(a.agencyName) + '<br>' + esc(a.agencyAddress) + '<br>' + esc(a.agencyPhone) + '</p>' +
+        '<p>The consumer reporting agency played no part in this decision and is unable to supply specific reasons why your</p>' +
+        '<p>☒ application for employment has been denied.<br>☐ employment is being terminated.</p>' +
+        '<p>You do, however, have a right under the Fair Credit Reporting Act to know the information contained in your file at the consumer reporting agency who furnished your consumer report. You are entitled to a free copy of your agency within 60 days of the receipt of this notice. You also have the right to dispute with the reporting agency the accuracy or completeness of any information in the report.</p>' +
+        '<p>If you have any questions regarding this letter, you should contact me at the Facility.</p>' + signature +
+        '<p style="text-align:right;font-size:10pt">AD-304 (09/13) — Verify details and obtain Administrator signature</p>';
+    }
+    const html = '<!doctype html><html><head><title>AD-' + which + ' — ' + name + '</title><style>@page{size:letter;margin:0.7in}body{font:12pt "Times New Roman",serif;line-height:1.5;color:black}h1{text-align:center;font-size:16pt;margin-bottom:35px}p{margin:18px 0}@media screen{body{max-width:760px;margin:36px auto}.printbutton{display:block}}@media print{.printbutton{display:none}}</style></head><body><button class="printbutton" onclick="window.print()">Print / Save as PDF</button>' + letter + '</body></html>';
+    const blob = new Blob([html], {type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const tab = window.open(url, '_blank', 'noopener');
+    if (!tab) alert('Allow pop-ups for this site to open the prepared letter.');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+window.printAdverseForms = printAdverseForms;
 
 render();
 </script>
