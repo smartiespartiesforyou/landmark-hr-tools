@@ -85,15 +85,14 @@
     </div>
 
     <div class="card filters">
-        <div><label for="search">Search</label><input id="search" placeholder="Name, position, shift, email"></div>
+        <div><label for="search">Search</label><input id="search" placeholder="Name, department, shift, email"></div>
         <div><label for="stageFilter">Stage</label><select id="stageFilter"><option value="">All stages</option></select></div>
-        <div><label for="positionFilter">Position</label><select id="positionFilter"><option value="">All positions</option></select></div>
         <button class="light" id="clearFilters">Clear</button>
     </div>
 
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Applicant</th><th>Position / Shift</th><th>Current Stage</th><th>Next Step</th><th>Updated</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Applicant</th><th>Department / Shift</th><th>Current Stage</th><th>Next Step</th><th>Updated</th><th>Actions</th></tr></thead>
             <tbody id="applicantRows"></tbody>
         </table>
     </div>
@@ -108,7 +107,7 @@
             <div><label for="name">Applicant name *</label><input id="name" required></div>
             <div><label for="phone">Phone number</label><input id="phone" type="tel"></div>
             <div><label for="email">Email *</label><input id="email" type="email" required></div>
-            <div><label for="position">Position *</label><input id="position" required></div><div><label for="department">Department</label><select id="department"><option value="">Select department</option><option>CNA</option><option>Nursing</option><option>HSK</option><option>DTY</option><option>NAT</option><option>Sunshine Aide</option><option>Activities</option><option>Maintenance</option><option>Laundry</option><option>Social Services</option><option>Therapy</option><option>Other</option></select></div>
+            <div><label for="department">Department</label><select id="department"><option value="">Select department</option><option>CNA</option><option>Nursing</option><option>HSK</option><option>DTY</option><option>NAT</option><option>Sunshine Aide</option><option>Activities</option><option>Maintenance</option><option>Laundry</option><option>Social Services</option><option>Therapy</option><option>Other</option></select></div>
             <div><label for="shift">Shift</label><input id="shift" placeholder="Example: 6–2"></div><div class="span-2"><label for="applicantStreet">Applicant mailing street address</label><input id="applicantStreet" autocomplete="street-address"></div><div><label for="applicantCity">City</label><input id="applicantCity"></div><div><label for="applicantState">State</label><input id="applicantState" value="LA" maxlength="2"></div><div><label for="applicantZip">ZIP code</label><input id="applicantZip" maxlength="10"></div>
 
             <h3 class="section-title">Fingerprint screening</h3>
@@ -156,7 +155,7 @@
 <dialog id="printDialog">
     <div class="dialog-head"><h2>Supervisor Update</h2><button type="button" class="light" id="closePrint">Close</button></div>
     <div class="dialog-body grid">
-        <div><label for="printDepartment">Department</label><select id="printDepartment"><option value="">All departments</option></select></div><div><label for="printPosition">Position</label><select id="printPosition"><option value="">All positions</option></select></div>
+        <div><label for="printDepartment">Department</label><select id="printDepartment"><option value="">All departments</option></select></div>
         <div><label for="printTitle">Page title</label><input id="printTitle" value="Applicant Status Report"></div>
         <div style="align-self:end"><button id="runPrint" type="button">Print Applicant Status Report</button></div>
     </div>
@@ -167,7 +166,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 const STORAGE_KEY = 'landmarkFingerprintApplicantTrackerV1';
-const fields = ['name','phone','email','position','department','shift','applicantStreet','applicantCity','applicantState','applicantZip','agencyName','agencyAddress','agencyPhone','administratorName','facilityLegalName','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
+const fields = ['name','phone','email','department','shift','applicantStreet','applicantCity','applicantState','applicantZip','agencyName','agencyAddress','agencyPhone','administratorName','facilityLegalName','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
 let applicants = loadApplicants();
 let emailDraft = null;
 
@@ -271,16 +270,15 @@ function statusFor(a) {
 function render() {
     const q = $('search').value.trim().toLowerCase();
     const stage = $('stageFilter').value;
-    const position = $('positionFilter').value;
     const visible = applicants.filter(a => {
         const s = statusFor(a)[0];
-        const haystack = [a.name,a.position,a.shift,a.email].join(' ').toLowerCase();
-        return (!q || haystack.includes(q)) && (!stage || s === stage) && (!position || a.position === position);
+        const haystack = [a.name,applicantDepartment(a),a.shift,a.email].join(' ').toLowerCase();
+        return (!q || haystack.includes(q)) && (!stage || s === stage);
     }).sort((a,b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
     $('applicantRows').innerHTML = visible.length ? visible.map(a => {
         const [status,next,klass] = statusFor(a);
-        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="secondary" onclick="printAdverseForms('${a.id}')">AD-303 / AD-304</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
+        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(applicantDepartment(a))}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="secondary" onclick="printAdverseForms('${a.id}')">AD-303 / AD-304</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
     }).join('') : '<tr><td colspan="6">No applicants match this view.</td></tr>';
     refreshOptions();
 }
@@ -301,15 +299,12 @@ function applicantDepartment(a) {
     return 'Other';
 }
 function refreshOptions() {
-    const selectedStage = $('stageFilter').value, selectedPosition = $('positionFilter').value, selectedPrint = $('printPosition').value, selectedDept = $('printDepartment').value;
+    const selectedStage = $('stageFilter').value, selectedDept = $('printDepartment').value;
     const stages = [...new Set(applicants.map(a => statusFor(a)[0]))].sort();
-    const positions = [...new Set(applicants.map(a => a.position).filter(Boolean))].sort();
     $('stageFilter').innerHTML = '<option value="">All stages</option>' + stages.map(x => `<option>${esc(x)}</option>`).join('');
-    $('positionFilter').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
-    $('printPosition').innerHTML = '<option value="">All positions</option>' + positions.map(x => `<option>${esc(x)}</option>`).join('');
     const departments=[...new Set(['CNA','Nursing','HSK','DTY','NAT','Sunshine Aide','Activities','Maintenance','Laundry','Social Services','Therapy','Other',...applicants.map(applicantDepartment)])];
     $('printDepartment').innerHTML='<option value="">All departments</option>'+departments.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
-    $('stageFilter').value = selectedStage; $('positionFilter').value = selectedPosition; $('printPosition').value = selectedPrint; $('printDepartment').value = selectedDept;
+    $('stageFilter').value = selectedStage; $('printDepartment').value = selectedDept;
 }
 
 function openNew() {
@@ -364,7 +359,7 @@ window.deleteApplicant = id => {
 
 function emailTypes(a) {
     const first = (a.name || 'Applicant').trim().split(/\s+/)[0];
-    const positionLower = (a.position || '').toLowerCase();
+    const positionLower = applicantDepartment(a).toLowerCase();
     const supervisor = positionLower.includes('cna') || positionLower.includes('certified nursing assistant')
         ? 'Lolita Williams'
         : positionLower.includes('hsk') || positionLower.includes('housekeep')
@@ -378,7 +373,7 @@ function emailTypes(a) {
     const pay = a.payRate ? '$' + a.payRate.replace(/^\$/, '') : '[ENTER PAY RATE]';
     const orientationDate = a.orientation1 ? new Date(a.orientation1 + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'}) : '[ENTER ORIENTATION DATE]';
     const differentialText = clinicalDifferential ? ' If you are hired for a CNA or nursing position, shift differentials may apply based on your assigned shift, eligibility, and company policy. Additional information will be provided during orientation.' : '';
-    const offerBody = `READING THIS EMAIL IN ITS ENTIRETY IS REQUIRED. If you do not have all required documentation and necessary apps completed before orientation, your orientation will be rescheduled.\n\n${a.name},\n\nWe are pleased to offer you employment with Landmark South Nursing & Rehabilitation as a ${a.position}.\n\nYour base hourly rate will be ${pay} per hour. Pay rates are set according to the company’s established pay scale and are non-negotiable.${differentialText}\n\nYour orientation is scheduled as follows:\n\nDate: ${orientationDate}\nTime: 10:00 a.m.\nLocation:\nLandmark South Nursing & Rehabilitation\n18180 Jefferson Hwy\nBaton Rouge, LA 70817\n\nOrientation is paid and will be considered your official start date. Late arrivals will not be permitted and orientation will be rescheduled. Please arrive promptly and dressed in scrubs or business attire.\n\nYou must remain on-site until all required orientation videos have been completed, which may take six (6) or more hours. Orientation is scheduled until 4:30 p.m. If you are unable to stay for the entire orientation, please do not schedule at this time.\n\nIf all required videos are not completed during orientation, you will be required to return the following morning at 8:30 a.m. to finish the remaining assignments.\n\nYou will also be required to complete a drug screening.\n\nYour immediate supervisor will be ${supervisor}.\n\nREQUIRED BEFORE ORIENTATION\n\nPlease download these free apps before arriving:\n- TalentLMS\n- UKG Ready\n- Payactiv\n\nPlease bring a laptop, tablet, or smartphone capable of streaming videos, along with appropriate chargers and headphones.\n\nI-9 DOCUMENTATION\n\nYou must bring original, unexpired documentation establishing your identity and authorization to work in the United States. You may bring either:\n\n- One List A document, such as a U.S. passport, Permanent Resident Card, or Employment Authorization Document; OR\n- One List B document, such as a driver’s license or state-issued ID, AND one List C document, such as an unrestricted Social Security card or an original or certified birth certificate.\n\nThe employer cannot choose which acceptable documents you present. The complete list is available at: https://www.uscis.gov/i-9-central/form-i-9-acceptable-documents\n\nDIRECT DEPOSIT\n\nYou must provide information from your bank showing that you are the account holder: bank name, your name, routing number, and account number. You may provide a voided check or a screenshot from your bank account app. This information must be emailed to apriest@asimgt.com.\n\nARRIVAL INSTRUCTIONS\n\n- Bring a pen.\n- The orientation classroom is cold. Bring a sweater or jacket.\n- Sign in at the front kiosk located in the waiting room.\n- You do not need to check in with the receptionist.\n- After signing in, remain in the waiting room until a staff member comes for you.\n- Do not go to the classroom or other areas of the facility on your own.\n- Children are not permitted to attend orientation.\n\nIf you do not reply to this email confirming your attendance, we will consider the position declined and remove you from the orientation schedule. Confirmation must be provided by email only.\n\nWe look forward to welcoming you to Landmark South.`;
+    const offerBody = `READING THIS EMAIL IN ITS ENTIRETY IS REQUIRED. If you do not have all required documentation and necessary apps completed before orientation, your orientation will be rescheduled.\n\n${a.name},\n\nWe are pleased to offer you employment with Landmark South Nursing & Rehabilitation.\n\nYour base hourly rate will be ${pay} per hour. Pay rates are set according to the company’s established pay scale and are non-negotiable.${differentialText}\n\nYour orientation is scheduled as follows:\n\nDate: ${orientationDate}\nTime: 10:00 a.m.\nLocation:\nLandmark South Nursing & Rehabilitation\n18180 Jefferson Hwy\nBaton Rouge, LA 70817\n\nOrientation is paid and will be considered your official start date. Late arrivals will not be permitted and orientation will be rescheduled. Please arrive promptly and dressed in scrubs or business attire.\n\nYou must remain on-site until all required orientation videos have been completed, which may take six (6) or more hours. Orientation is scheduled until 4:30 p.m. If you are unable to stay for the entire orientation, please do not schedule at this time.\n\nIf all required videos are not completed during orientation, you will be required to return the following morning at 8:30 a.m. to finish the remaining assignments.\n\nYou will also be required to complete a drug screening.\n\nYour immediate supervisor will be ${supervisor}.\n\nREQUIRED BEFORE ORIENTATION\n\nPlease download these free apps before arriving:\n- TalentLMS\n- UKG Ready\n- Payactiv\n\nPlease bring a laptop, tablet, or smartphone capable of streaming videos, along with appropriate chargers and headphones.\n\nI-9 DOCUMENTATION\n\nYou must bring original, unexpired documentation establishing your identity and authorization to work in the United States. You may bring either:\n\n- One List A document, such as a U.S. passport, Permanent Resident Card, or Employment Authorization Document; OR\n- One List B document, such as a driver’s license or state-issued ID, AND one List C document, such as an unrestricted Social Security card or an original or certified birth certificate.\n\nThe employer cannot choose which acceptable documents you present. The complete list is available at: https://www.uscis.gov/i-9-central/form-i-9-acceptable-documents\n\nDIRECT DEPOSIT\n\nYou must provide information from your bank showing that you are the account holder: bank name, your name, routing number, and account number. You may provide a voided check or a screenshot from your bank account app. This information must be emailed to apriest@asimgt.com.\n\nARRIVAL INSTRUCTIONS\n\n- Bring a pen.\n- The orientation classroom is cold. Bring a sweater or jacket.\n- Sign in at the front kiosk located in the waiting room.\n- You do not need to check in with the receptionist.\n- After signing in, remain in the waiting room until a staff member comes for you.\n- Do not go to the classroom or other areas of the facility on your own.\n- Children are not permitted to attend orientation.\n\nIf you do not reply to this email confirming your attendance, we will consider the position declined and remove you from the orientation schedule. Confirmation must be provided by email only.\n\nWe look forward to welcoming you to Landmark South.`;
     const options = [
         {id:'application_received', label:'Application Received / Fingerprint Instructions', subject:'Application Received: Action Required', body:`Hello ${first},
 
@@ -532,8 +527,8 @@ $('newBtn').onclick = openNew; $('closeForm').onclick = $('cancelForm').onclick 
 $('closeEmail').onclick = () => $('emailDialog').close();
 $('closePrint').onclick = () => $('printDialog').close();
 $('printBtn').onclick = () => $('printDialog').showModal();
-['search','stageFilter','positionFilter'].forEach(id => $(id).addEventListener(id === 'search' ? 'input' : 'change', render));
-$('clearFilters').onclick = () => { $('search').value=''; $('stageFilter').value=''; $('positionFilter').value=''; render(); };
+['search','stageFilter'].forEach(id => $(id).addEventListener(id === 'search' ? 'input' : 'change', render));
+$('clearFilters').onclick = () => { $('search').value=''; $('stageFilter').value=''; render(); };
 
 $('copyEmail').onclick = async () => { if (!emailDraft) return; await navigator.clipboard.writeText(`To: ${emailDraft.to}\nSubject: ${emailDraft.subject}\n\n${emailDraft.body}`); $('copyEmail').textContent='Copied'; setTimeout(()=>$('copyEmail').textContent='Copy Email',1500); };
 $('openEmail').onclick = () => { if (!emailDraft) return; location.href = `mailto:${encodeURIComponent(emailDraft.to)}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`; };
@@ -631,20 +626,19 @@ const supervisorKey = [
     ['Hired','Hiring process completed']
 ];
 $('runPrint').onclick = () => {
-    const position = $('printPosition').value;
     const department = $('printDepartment').value;
-    const rows = applicants.filter(a => (!position || a.position === position) && (!department || applicantDepartment(a) === department));
+    const rows = applicants.filter(a => (!department || applicantDepartment(a) === department));
     const order = {attention:0, progress:1, orientation:2, closed:3, hired:4};
     const sorted = [...rows].sort((a,b) =>
         (order[supervisorStatus(a)[2]] ?? 9) - (order[supervisorStatus(b)[2]] ?? 9) ||
         String(a.name || '').localeCompare(String(b.name || '')));
-    const tableHeaders = '<thead><tr><th>Applicant</th><th>Phone</th><th>Position / Shift</th><th>Current Status</th><th>Next Step</th></tr></thead>';
+    const tableHeaders = '<thead><tr><th>Applicant</th><th>Phone</th><th>Department / Shift</th><th>Current Status</th><th>Next Step</th></tr></thead>';
     const applicantRows = sorted.map(a => {
         const [status, next] = supervisorStatus(a);
-        return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(a.position)}<br>${esc(a.shift)}</td><td>${esc(status)}</td><td>${esc(next)}</td></tr>`;
+        return `<tr><td>${esc(a.name)}</td><td>${esc(a.phone || '')}</td><td>${esc(applicantDepartment(a))}<br>${esc(a.shift)}</td><td>${esc(status)}</td><td>${esc(next)}</td></tr>`;
     }).join('');
     $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Report')}</h1>
-        <div class="print-date">Printed ${esc(printTimestampText())}${department ? ' — ' + esc(department) : ' — All departments'}${position ? ' — ' + esc(position) : ''}</div>
+        <div class="print-date">Printed ${esc(printTimestampText())}${department ? ' — ' + esc(department) : ' — All departments'}</div>
         <table class="applicant-print-table">${tableHeaders}<tbody>${applicantRows || '<tr><td colspan="5">No applicants to display.</td></tr>'}</tbody></table>
         <section class="print-key"><h2>Applicant Status Key</h2><div class="key-items">${supervisorKey.map(([status,meaning])=>`<span><strong>${esc(status)}:</strong> ${esc(meaning)}</span>`).join('')}</div><p>Statuses reflect information available to Human Resources as of the report date. Confidential screening and employment records remain with HR.</p></section>`;
     $('printDialog').close();
