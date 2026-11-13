@@ -112,7 +112,7 @@
 
             <h3 class="section-title">Fingerprint screening</h3>
             <div><label for="fingerprintAppointmentDate">Fingerprint appointment date</label><input id="fingerprintAppointmentDate" type="date"></div>
-            <div><label for="fingerprintCompleted">Fingerprint appointment completed</label><select id="fingerprintCompleted"><option value="">Pending</option><option>Yes</option><option>No</option></select></div>
+            <div><label for="fingerprintCompleted">Fingerprint appointment completed</label><select id="fingerprintCompleted"><option value="">Pending</option><option>Yes</option><option>No</option><option>Missed Appointment</option></select></div>
             <div><label for="fingerprintResult">Fingerprint result</label><select id="fingerprintResult"><option value="">Pending</option><option>Clear</option><option>Record Found</option></select></div>
             <div><label for="fingerprintReceipt">Fingerprint receipt</label><select id="fingerprintReceipt"><option value="">Pending</option><option>Received</option><option>Missing</option></select></div>
             <div><label for="backgroundReview">Background follow-up</label><select id="backgroundReview"><option value="">None</option><option>Applicant Documentation Needed</option><option>Management Review Required</option><option>Pre-Adverse Action Process</option><option>Cleared After Review</option></select></div>
@@ -262,6 +262,7 @@ function statusFor(a) {
         if (a.orientation1) return ['Orientation Scheduled', 'Attend orientation on ' + fmtDate(a.orientation1), ''];
         return ['Offer Accepted', 'Schedule orientation', 'done'];
     }
+    if (a.fingerprintCompleted === 'Missed Appointment') return ['Missed Appointment', 'Reschedule fingerprint appointment', 'attention'];
     if (a.fingerprintCompleted === 'Yes') return ['Fingerprint Results Pending', 'Confirm receipt and review fingerprint results', ''];
     if (a.fingerprintAppointmentDate) return ['Fingerprint Appointment Scheduled', 'Fingerprint appointment: ' + fmtDate(a.fingerprintAppointmentDate), 'attention'];
     return ['Application Received', 'Schedule fingerprint appointment', ''];
@@ -597,6 +598,7 @@ function supervisorStatus(a) {
     }
     if (internal === 'Needs New Orientation Date') return ['Needs New Orientation Date', 'Reschedule orientation', 'attention'];
     if (internal === 'Offer Sent—Waiting for Reply') return ['Offer Sent—Waiting for Reply', 'Await applicant response', 'attention'];
+    if (internal === 'Missed Appointment') return ['Missed Appointment', 'Reschedule fingerprint appointment', 'attention'];
     if (internal === 'Fingerprint Appointment Scheduled') return ['Fingerprint Appointment Scheduled', a.fingerprintAppointmentDate ? 'Fingerprint appointment: ' + fmtDate(a.fingerprintAppointmentDate) : 'Appointment date not entered', 'progress'];
     if (internal === 'Fingerprint Results Pending') return ['Fingerprint Results Pending', 'HR awaiting screening completion', 'progress'];
     if (internal === 'Application Received') return ['Application Received', 'HR processing application', 'attention'];
@@ -613,6 +615,7 @@ const supervisorSections = [
 const supervisorKey = [
     ['Application Received','Application received; HR processing'],
     ['Fingerprint Appointment Scheduled','Fingerprint appointment scheduled'],
+    ['Missed Appointment','Applicant missed fingerprint appointment; rescheduling needed'],
     ['Fingerprint Results Pending','Screening in progress'],
     ['Under Review','HR reviewing eligibility or requirements'],
     ['Needs New Orientation Date','Orientation needs rescheduling'],
