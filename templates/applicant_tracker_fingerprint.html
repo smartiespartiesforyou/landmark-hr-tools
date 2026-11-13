@@ -256,9 +256,9 @@ function statusFor(a) {
     if (a.preAdverseSentDate) {
         const due=adverseReviewDateText(a.preAdverseSentDate);
         if(a.managementDecision==='Cleared to Continue') return ['Cleared After Review', 'Continue hiring process; AD-304 not needed', 'done'];
-        if(!adverseReviewReady(a.preAdverseSentDate)) return ['AD-303 Waiting Period', 'AD-304 review date: '+due+' (8-day buffer / at least 5 weekdays; verify holidays)', 'attention'];
-        if(a.managementDecision==='Do Not Hire') return ['AD-304 — Review to Send', 'Review date '+due+' reached; verify holidays, disputes and Administrator approval', 'attention'];
-        return ['AD-303 — Decision Pending', 'AD-304 review date '+due+' reached; Administrator decision required', 'attention'];
+        if(!adverseReviewReady(a.preAdverseSentDate)) return ['Decision Pending', 'AD-304 review date: '+due+' (8-day buffer / at least 5 weekdays; verify holidays)', 'attention'];
+        if(a.managementDecision==='Do Not Hire') return ['Decision Pending', 'Review date '+due+' reached; verify holidays, disputes and Administrator approval', 'attention'];
+        return ['Decision Pending', 'AD-304 review date '+due+' reached; Administrator decision required', 'attention'];
     }
     if (a.manualClose) return ['Closed—' + a.manualClose, 'Application closed', 'closed'];
     if (a.managementDecision === 'Do Not Hire') return ['AD-303 Required', 'Complete and send AD-303 before final adverse action', 'attention'];
@@ -591,7 +591,7 @@ function supervisorStatus(a) {
     const [internal, next] = statusFor(a);
     // The printed stage is driven by today's HR status, never a separately stored or stale stage.
     // Protect confidential background findings on supervisor copies.
-    if (/AD-303|AD-304|Pre-Adverse|Background Review|Management Review|Applicant Documentation|Cleared After Review|Final Adverse|Closed—Background/.test(internal)) {
+    if (/Decision Pending|AD-303|AD-304|Pre-Adverse|Background Review|Management Review|Applicant Documentation|Cleared After Review|Final Adverse|Closed—Background/.test(internal)) {
         if (internal==='Closed—Background Decision') return ['Not Selected','Application closed','closed'];
         if (internal==='Cleared After Review') return ['Under Review','HR completing next hiring step','progress'];
         return ['Under Review','HR reviewing application; update pending','progress'];
