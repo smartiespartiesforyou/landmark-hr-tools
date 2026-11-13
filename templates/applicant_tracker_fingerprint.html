@@ -636,20 +636,11 @@ const supervisorSections = [
     {key:'hired', title:'5. HIRED'}
 ];
 const supervisorKey = [
-    ['Application Received','Application received; HR processing'],
-    ['Fingerprint Appointment Scheduled','Fingerprint appointment scheduled'],
-    ['Missed Appointment','Applicant missed fingerprint appointment; rescheduling needed'],
-    ['Fingerprint Results Pending','Screening in progress'],
-    ['Under Review','HR reviewing eligibility or requirements'],
-    ['Needs New Orientation Date','Orientation needs rescheduling'],
-    ['Offer Sent—Waiting for Reply','Awaiting response to offer'],
-    ['Ready for Orientation','HR preparing the next hiring step'],
-    ['Orientation Scheduled','Orientation date assigned'],
-    ['Withdrawn','Applicant declined or withdrew'],
-    ['No Response','Applicant has not responded'],
-    ['No Show','Applicant missed a scheduled appointment or orientation'],
-    ['Not Selected','Application will not move forward'],
-    ['Hired','Hiring process completed']
+    ['Decision Pending','Await HR’s final determination before proceeding.'],
+    ['Missed Appointment','Applicant missed fingerprinting; rescheduling is needed.'],
+    ['Fingerprint Results Pending','Fingerprinting completed; results are pending.'],
+    ['Offer Sent—Waiting for Reply','Awaiting the applicant’s response.'],
+    ['Hired','Applicant attended orientation.']
 ];
 $('runPrint').onclick = () => {
     const department = $('printDepartment').value;
@@ -662,7 +653,8 @@ $('runPrint').onclick = () => {
     }).join('');
     $('printArea').innerHTML = `<h1>${esc($('printTitle').value || 'Applicant Status Report')}</h1>
         <div class="print-date">Printed ${esc(printTimestampText())}${department ? ' — ' + esc(department) : ' — All departments'}</div>
-        <table class="applicant-print-table">${tableHeaders}<tbody>${applicantRows || '<tr><td colspan="5">No applicants to display.</td></tr>'}</tbody></table>`;
+        <table class="applicant-print-table">${tableHeaders}<tbody>${applicantRows || '<tr><td colspan="5">No applicants to display.</td></tr>'}</tbody></table>
+        <section class="print-key"><h2>Applicant Status Key</h2><div class="key-items">${supervisorKey.map(([status,meaning])=>`<span><strong>${esc(status)}:</strong> ${esc(meaning)}</span>`).join('')}</div></section>`;
     $('printDialog').close();
     window.print();
 };
