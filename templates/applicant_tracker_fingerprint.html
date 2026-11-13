@@ -286,7 +286,12 @@ function render() {
         const s = statusFor(a)[0];
         const haystack = [a.name,applicantDepartment(a),a.shift,a.email].join(' ').toLowerCase();
         return (!q || haystack.includes(q)) && (!stage || s === stage);
-    }).sort((a,b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    }).sort((a,b) => {
+        const stageA = statusFor(a)[0], stageB = statusFor(b)[0];
+        return Number(stageA === 'Hired') - Number(stageB === 'Hired')
+            || stageA.localeCompare(stageB)
+            || String(a.name || '').localeCompare(String(b.name || ''));
+    });
 
     $('applicantRows').innerHTML = visible.length ? visible.map(a => {
         const [status,next,klass] = statusFor(a);
