@@ -739,6 +739,12 @@ async function printAdverseForms(id, which) {
             adverseFormMessage('Enter the consumer reporting agency name, mailing address and phone exactly as verified for this report.');return;
         }
     }
+    const sentDate = which === '303' ? a.preAdverseSentDate : a.finalAdverseSentDate;
+    const sentDateLabel = which === '303' ? 'Pre-adverse notice sent' : 'Final adverse notice sent';
+    if (!sentDate || !/^\d{4}-\d{2}-\d{2}$/.test(sentDate) || Number.isNaN(new Date(sentDate+'T12:00:00').getTime())) {
+        adverseFormMessage('First open Update and enter the "'+sentDateLabel+'" date you want on AD-'+which+'.'); return;
+    }
+    const letterDate = fmtDate(sentDate);
     try {
         adverseFormMessage('Loading original AD-'+which+' PDF…');
         const original=await officialFormRead(which);
@@ -750,8 +756,7 @@ async function printAdverseForms(id, which) {
             const field=form.getTextField(key);
             field.setText(String(value));
         };
-        const localDate=new Date().toLocaleDateString('en-US');
-        set('Date',localDate);
+        set('Date',letterDate);
         set('Name',a.name);
         set('Address',a.applicantStreet);
         set('City State Zip',a.applicantCity+', '+a.applicantState+' '+a.applicantZip);
