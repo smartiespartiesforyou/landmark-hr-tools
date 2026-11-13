@@ -468,7 +468,12 @@ window.showEmailMenu = id => {
     const log = a.emailLog || {};
     const menu = options.map((option,index) => `${index+1}. ${option.label}${log[option.id] ? ' (SENT ' + new Date(log[option.id]).toLocaleDateString() + ')' : ''}`).join('\n');
     const choice = prompt('Choose email:\n' + menu + '\n\nEnter 1 through ' + options.length + ':');
-    const selected = options[Number(choice)-1]; if (!selected) return;
+    if (choice === null) return;
+    const formCode = choice.trim().toUpperCase().replace(/^AD[\s-]*/, '');
+    const selected = ['303','304'].includes(formCode)
+        ? options.find(option => option.id === (formCode === '303' ? 'pre_adverse' : 'final_adverse'))
+        : options[Number(choice)-1];
+    if (!selected) { alert(['303','304'].includes(formCode) ? 'That adverse-action email is not available for this applicant. Update the background review and management decision first.' : 'Please enter one of the email numbers shown in the menu.'); return; }
     if (log[selected.id] && !confirm(`${selected.label} was already marked sent on ${new Date(log[selected.id]).toLocaleString()}.\n\nOpen another draft anyway?`)) return;
     if (selected.id === 'not_selected' && (a.fingerprintResult === 'Record Found' || a.backgroundReview)) {
         alert('STOP: The Not Selected email cannot be used when background information affected the decision. Use the applicable company adverse-action process.');
@@ -694,8 +699,10 @@ for (const code of ['303','304']) {
 }
 async function printAdverseForms(id) {
     const a=applicants.find(x=>x.id===id); if(!a)return;
-    const which=prompt('Enter 303 for the original pre-adverse PDF or 304 for the original final adverse PDF:');
-    if(!['303','304'].includes(which))return;
+    const choice=prompt('Enter AD-303 for the original pre-adverse PDF or AD-304 for the original final adverse PDF:');
+    if (choice === null) return;
+    const which=choice.trim().toUpperCase().replace(/^AD[\s-]*/, '');
+    if(!['303','304'].includes(which)) { alert('Please enter AD-303 or AD-304 to choose a form.'); return; }
     if(!a.applicantStreet||!a.applicantCity||!a.applicantState||!a.applicantZip) {
         alert('First open Update and complete the applicant mailing address.');return;
     }
