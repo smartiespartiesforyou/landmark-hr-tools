@@ -279,6 +279,13 @@ function statusFor(a) {
     return ['Application Received', 'Schedule fingerprint appointment', ''];
 }
 
+function compareApplicantsByStage(a, b) {
+    const stageA = statusFor(a)[0], stageB = statusFor(b)[0];
+    return Number(stageA === 'Hired') - Number(stageB === 'Hired')
+        || stageA.localeCompare(stageB)
+        || String(a.name || '').localeCompare(String(b.name || ''));
+}
+
 function render() {
     const q = $('search').value.trim().toLowerCase();
     const stage = $('stageFilter').value;
@@ -286,12 +293,7 @@ function render() {
         const s = statusFor(a)[0];
         const haystack = [a.name,applicantDepartment(a),a.shift,a.email].join(' ').toLowerCase();
         return (!q || haystack.includes(q)) && (!stage || s === stage);
-    }).sort((a,b) => {
-        const stageA = statusFor(a)[0], stageB = statusFor(b)[0];
-        return Number(stageA === 'Hired') - Number(stageB === 'Hired')
-            || stageA.localeCompare(stageB)
-            || String(a.name || '').localeCompare(String(b.name || ''));
-    });
+    }).sort(compareApplicantsByStage);
 
     $('applicantRows').innerHTML = visible.length ? visible.map(a => {
         const [status,next,klass] = statusFor(a);
@@ -652,10 +654,7 @@ const supervisorKey = [
 $('runPrint').onclick = () => {
     const department = $('printDepartment').value;
     const rows = applicants.filter(a => (!department || applicantDepartment(a) === department));
-    const order = {attention:0, progress:1, orientation:2, closed:3, hired:4};
-    const sorted = [...rows].sort((a,b) =>
-        (order[supervisorStatus(a)[2]] ?? 9) - (order[supervisorStatus(b)[2]] ?? 9) ||
-        String(a.name || '').localeCompare(String(b.name || '')));
+    const sorted = [...rows].sort(compareApplicantsByStage);
     const tableHeaders = '<thead><tr><th>Applicant</th><th>Phone</th><th>Department / Shift</th><th>Current Status</th><th>Next Step</th></tr></thead>';
     const applicantRows = sorted.map(a => {
         const [status, next] = supervisorStatus(a);
