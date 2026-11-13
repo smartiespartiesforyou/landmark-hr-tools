@@ -161,6 +161,17 @@
     </div>
 </dialog>
 
+<dialog id="adverseFormsDialog">
+    <div class="dialog-head"><h2>AD-303 / AD-304 Forms</h2><button type="button" class="light" id="closeAdverseForms">Close</button></div>
+    <div class="dialog-body">
+        <p id="adverseApplicant"></p>
+        <p>Choose the form to prepare:</p>
+        <div class="actions"><button type="button" id="prepare303">Prepare AD-303</button><button type="button" id="prepare304">Prepare AD-304</button></div>
+        <p id="adverseFormMessage" role="status" aria-live="polite"></p>
+        <a id="adverseFormDownload" class="button" hidden>Download prepared PDF</a>
+    </div>
+</dialog>
+
 <div id="printArea"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -279,7 +290,7 @@ function render() {
 
     $('applicantRows').innerHTML = visible.length ? visible.map(a => {
         const [status,next,klass] = statusFor(a);
-        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(applicantDepartment(a))}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="secondary" onclick="printAdverseForms('${a.id}')">AD-303 / AD-304</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
+        return `<tr><td><strong>${esc(a.name)}</strong><br><span class="hint">${esc(a.email)}</span></td><td>${esc(applicantDepartment(a))}<br>${esc(a.shift)}</td><td><span class="status ${klass}">${esc(status)}</span></td><td>${esc(next)}</td><td>${esc(a.updatedAt ? new Date(a.updatedAt).toLocaleDateString() : '')}</td><td><div class="actions"><button onclick="editApplicant('${a.id}')">Update</button><button class="secondary" onclick="showEmailMenu('${a.id}')">Emails</button><button class="secondary" onclick="showAdverseForms('${a.id}')">AD-303 / AD-304</button><button class="danger" onclick="deleteApplicant('${a.id}')">Delete</button></div></td></tr>`;
     }).join('') : '<tr><td colspan="6">No applicants match this view.</td></tr>';
     refreshOptions();
 }
@@ -697,29 +708,41 @@ for (const code of ['303','304']) {
         e.target.value='';
     });
 }
-async function printAdverseForms(id) {
+let adverseApplicantId = null;
+let adverseDownloadUrl = null;
+function adverseFormMessage(message) { $('adverseFormMessage').textContent = message; }
+window.showAdverseForms = id => {
     const a=applicants.find(x=>x.id===id); if(!a)return;
-    const choice=prompt('Enter AD-303 for the original pre-adverse PDF or AD-304 for the original final adverse PDF:');
-    if (choice === null) return;
-    const which=choice.trim().toUpperCase().replace(/^AD[\s-]*/, '');
-    if(!['303','304'].includes(which)) { alert('Please enter AD-303 or AD-304 to choose a form.'); return; }
+    adverseApplicantId=id;
+    $('adverseApplicant').textContent=a.name || 'Applicant';
+    adverseFormMessage('Select AD-303 or AD-304 to check requirements and prepare the original corporate PDF.');
+    $('adverseFormDownload').hidden=true;
+    $('adverseFormsDialog').showModal();
+};
+$('closeAdverseForms').onclick=()=>$('adverseFormsDialog').close();
+for (const code of ['303','304']) $('prepare'+code).onclick=()=>printAdverseForms(adverseApplicantId,code);
+async function printAdverseForms(id, which) {
+    const a=applicants.find(x=>x.id===id); if(!a) { adverseFormMessage('Applicant not found. Close this window and try again.'); return; }
+    $('adverseFormDownload').hidden=true;
+    adverseFormMessage('Checking AD-'+which+' requirements…');
     if(!a.applicantStreet||!a.applicantCity||!a.applicantState||!a.applicantZip) {
-        alert('First open Update and complete the applicant mailing address.');return;
+        adverseFormMessage('First open Update and complete the applicant mailing address.');return;
     }
     if(which==='303' && a.fingerprintResult!=='Record Found' && !['Management Review Required','Pre-Adverse Action Process'].includes(a.backgroundReview)) {
-        alert('Record the background review requiring AD-303 before preparing the letter.');return;
+        adverseFormMessage('Record the background review requiring AD-303 before preparing the letter.');return;
     }
     if(which==='304') {
         if(a.managementDecision!=='Do Not Hire'||!a.preAdverseSentDate||!adverseReviewReady(a.preAdverseSentDate)) {
-            alert('AD-304 requires a Do Not Hire decision and five business days after the recorded AD-303 notice. Independently verify holidays, any dispute and Administrator approval.');return;
+            adverseFormMessage('AD-304 requires a Do Not Hire decision and five business days after the recorded AD-303 notice. Independently verify holidays, any dispute and Administrator approval.');return;
         }
         if(!a.agencyName||!a.agencyAddress||!a.agencyPhone) {
-            alert('Enter the consumer reporting agency name, mailing address and phone exactly as verified for this report.');return;
+            adverseFormMessage('Enter the consumer reporting agency name, mailing address and phone exactly as verified for this report.');return;
         }
     }
     try {
+        adverseFormMessage('Loading original AD-'+which+' PDF…');
         const original=await officialFormRead(which);
-        if(!original) {alert('First select the original AD-'+which+' PDF in the Official Corporate PDF Forms section at the top of this page. It will be saved on this browser.');return;}
+        if(!original) {adverseFormMessage('First select the original AD-'+which+' PDF in the Official Corporate PDF Forms section at the top of this page. It will be saved on this browser.');return;}
         const pdf=await PDFLib.PDFDocument.load(original.slice());
         const form=pdf.getForm();
         const set=(key,value)=>{
@@ -750,12 +773,14 @@ async function printAdverseForms(id) {
         }
         const bytes=await pdf.save();
         const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
-        const link=document.createElement('a');link.href=url;link.download='AD-'+which+'_'+(a.name||'Applicant').replace(/[^a-z0-9 -]/gi,'').replace(/ +/g,'_')+'.pdf';
-        document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-        if(which==='303') alert('Original six-page AD-303 downloaded, including its FCRA rights pages. Review all fields, obtain Administrator signature, attach the applicable consumer report and record the actual date sent.');
-        else alert('Original AD-304 downloaded. Verify the reporting agency details, review with the Administrator and record the actual date sent.');
+        if(adverseDownloadUrl) URL.revokeObjectURL(adverseDownloadUrl);
+        adverseDownloadUrl=url;
+        const link=$('adverseFormDownload'); link.href=url; link.download='AD-'+which+'_'+(a.name||'Applicant').replace(/[^a-z0-9 -]/gi,'').replace(/ +/g,'_')+'.pdf';
+        link.textContent='Download AD-'+which+' PDF'; link.hidden=false;
+        if(which==='303') adverseFormMessage('Original six-page AD-303 is ready. Click Download above. It includes its FCRA rights pages. Review all fields, obtain Administrator signature, attach the applicable consumer report and record the actual date sent.');
+        else adverseFormMessage('Original AD-304 is ready. Click Download above. Verify the reporting agency details, review with the Administrator and record the actual date sent.');
     } catch(err) {
-        alert('The original form could not be filled: '+err.message+'. Please confirm you selected the original writable PDF and try again.');
+        adverseFormMessage('The original form could not be filled: '+err.message+'. Please confirm you selected the original writable PDF and try again.');
     }
 }
 window.printAdverseForms = printAdverseForms;
