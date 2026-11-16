@@ -166,6 +166,14 @@
     <div class="dialog-body">
         <p id="adverseApplicant"></p>
         <p>Choose the form to prepare:</p>
+        <label><input type="checkbox" id="includeReviewForms" checked> Include the three Right to Review forms in the prepared PDF (4 additional pages)</label>
+        <p class="hint">Corporate update dated November 16, 2026: background results are available for applicant pickup at the facility. Do not mail background results. These attachments are blank challenge/review forms.</p>
+        <div class="actions">
+            <a href="/static/background-review/right-to-review-packet.pdf" target="_blank" rel="noopener">Print all three review forms</a>
+            <a href="/static/background-review/federal-right-to-challenge.pdf" target="_blank" rel="noopener">Federal Right to Challenge</a>
+            <a href="/static/background-review/right-to-review-authorization.pdf" target="_blank" rel="noopener">LA Authorization</a>
+            <a href="/static/background-review/right-to-review-disclosure.pdf" target="_blank" rel="noopener">LA Disclosure</a>
+        </div>
         <div class="actions"><button type="button" id="prepare303">Prepare AD-303</button><button type="button" id="prepare304">Prepare AD-304</button></div>
         <p id="adverseFormMessage" role="status" aria-live="polite"></p>
         <a id="adverseFormDownload" class="button" hidden>Download prepared PDF</a>
@@ -447,10 +455,10 @@ Landmark South Nursing and Rehabilitation Center`}
             id:'pre_adverse',
             label:'AD-303 Pre-Adverse Action Email',
             subject:'Important Notice Regarding Your Background Check',
-            attachments:'BEFORE SENDING: Have the Administrator complete AD-303. Attach the completed AD-303, the consumer report being relied upon, and the FCRA Summary of Rights.',
+            attachments:'BEFORE SENDING: Have the Administrator complete AD-303. Include its FCRA rights pages and the three Right to Review forms. Per the November 16, 2026 corporate update, do not mail background results; advise the applicant that a copy is available for pickup at the facility.',
             body:`Hello ${first},
 
-Please review the attached Pre-Adverse Action Letter (AD-303), along with the attached copy of the consumer report and Summary of Your Rights Under the Fair Credit Reporting Act.
+Please review the attached Pre-Adverse Action Letter (AD-303), Summary of Your Rights Under the Fair Credit Reporting Act, and Right to Review forms. You may obtain a copy of your background results by stopping by the facility. Background results are not included with this notice.
 
 The information in the consumer report may adversely affect your application for employment. No final adverse employment decision has been made at this time.
 
@@ -466,7 +474,7 @@ Landmark South Nursing and Rehabilitation Center`
             id:'final_adverse',
             label:'AD-304 Final Adverse Action Email',
             subject:'Final Notice Regarding Your Application',
-            attachments:'BEFORE SENDING: Attach the completed AD-304 Adverse Action Letter. The tracker will prevent this email from opening until 5 business days have elapsed after the recorded AD-303 date.',
+            attachments:'BEFORE SENDING: Attach the completed AD-304 Adverse Action Letter and, if selected, the three Right to Review forms. Do not mail background results; copies are available for applicant pickup. The tracker will prevent this email from opening until 5 business days have elapsed after the recorded AD-303 date.',
             body:`Hello ${first},
 
 Please review the attached Adverse Action Letter (AD-304) regarding the final decision on your application for employment.
@@ -704,6 +712,15 @@ for (const code of ['303','304']) {
 }
 let adverseApplicantId = null;
 let adverseDownloadUrl = null;
+async function appendRightToReviewForms(pdf) {
+    const response = await fetch('/static/background-review/right-to-review-packet.pdf');
+    if (!response.ok) throw Error('Right to Review forms could not be loaded. Try again before printing the packet');
+    const attachments = await PDFLib.PDFDocument.load(await response.arrayBuffer());
+    if (attachments.getPageCount() !== 4) throw Error('The Right to Review packet must contain four pages');
+    // Keep the writable corporate letter intact. Append the original blank forms as pages.
+    const pages = await pdf.copyPages(attachments, attachments.getPageIndices());
+    pages.forEach(page => pdf.addPage(page));
+}
 function adverseFormMessage(message) { $('adverseFormMessage').textContent = message; }
 window.showAdverseForms = id => {
     const a=applicants.find(x=>x.id===id); if(!a)return;
@@ -770,14 +787,20 @@ async function printAdverseForms(id, which) {
             form.getCheckBox('Check Box4').check();
             form.getCheckBox('Check Box6').check();
         }
+        const includeReviewForms = $('includeReviewForms').checked;
+        if (includeReviewForms) {
+            adverseFormMessage('Adding the three Right to Review forms…');
+            await appendRightToReviewForms(pdf);
+        }
         const bytes=await pdf.save();
         const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
         if(adverseDownloadUrl) URL.revokeObjectURL(adverseDownloadUrl);
         adverseDownloadUrl=url;
-        const link=$('adverseFormDownload'); link.href=url; link.download='AD-'+which+'_'+(a.name||'Applicant').replace(/[^a-z0-9 -]/gi,'').replace(/ +/g,'_')+'.pdf';
-        link.textContent='Download AD-'+which+' PDF'; link.hidden=false;
-        if(which==='303') adverseFormMessage('Original six-page AD-303 is ready. Click Download above. It includes its FCRA rights pages. Review all fields, obtain Administrator signature, attach the applicable consumer report and record the actual date sent.');
-        else adverseFormMessage('Original AD-304 is ready. Click Download above. Verify the reporting agency details, review with the Administrator and record the actual date sent.');
+        const link=$('adverseFormDownload'); link.href=url; link.download='AD-'+which+'_'+(a.name||'Applicant').replace(/[^a-z0-9 -]/gi,'').replace(/ +/g,'_')+(includeReviewForms?'_with_Right_to_Review':'')+'.pdf';
+        link.textContent='Download AD-'+which+(includeReviewForms?' + review forms':'')+' PDF'; link.hidden=false;
+        const packetNote = includeReviewForms ? ' The three Right to Review forms are included (4 additional pages).' : ' The Right to Review forms are not included; use the links above to print them separately.';
+        if(which==='303') adverseFormMessage('Original six-page AD-303 is ready, including its FCRA rights pages.'+packetNote+' Review all fields, obtain Administrator signature and record the actual date sent. Per the November 16 corporate update, do not mail background results; advise the applicant that a copy is available for pickup at the facility.');
+        else adverseFormMessage('Original AD-304 is ready.'+packetNote+' Verify the reporting agency details, review with the Administrator and record the actual date sent. Do not mail background results; copies are available for applicant pickup.');
     } catch(err) {
         adverseFormMessage('The original form could not be filled: '+err.message+'. Please confirm you selected the original writable PDF and try again.');
     }
