@@ -177,6 +177,11 @@
         <div class="actions"><button type="button" id="prepare303">Prepare AD-303</button><button type="button" id="prepare304">Prepare AD-304</button></div>
         <p id="adverseFormMessage" role="status" aria-live="polite"></p>
         <a id="adverseFormDownload" class="button" hidden>Download prepared PDF</a>
+        <section id="adverseFormPreview" hidden aria-label="Filled letter preview">
+            <h3 id="adversePreviewTitle">Filled letter</h3>
+            <p><a id="adverseFormOpen" target="_blank" rel="noopener">Open filled PDF in a new tab to print</a></p>
+            <iframe id="adversePreviewFrame" title="Filled adverse action letter" style="width:100%;height:65vh;border:1px solid #c8d4dc"></iframe>
+        </section>
     </div>
 </dialog>
 
@@ -722,19 +727,25 @@ async function appendRightToReviewForms(pdf) {
     pages.forEach(page => pdf.addPage(page));
 }
 function adverseFormMessage(message) { $('adverseFormMessage').textContent = message; }
+function clearAdversePreview() {
+    $('adverseFormPreview').hidden = true;
+    $('adversePreviewFrame').removeAttribute('src');
+    $('adverseFormOpen').removeAttribute('href');
+    $('adverseFormDownload').hidden = true;
+}
 window.showAdverseForms = id => {
     const a=applicants.find(x=>x.id===id); if(!a)return;
     adverseApplicantId=id;
     $('adverseApplicant').textContent=a.name || 'Applicant';
     adverseFormMessage('Select AD-303 or AD-304 to check requirements and prepare the original corporate PDF.');
-    $('adverseFormDownload').hidden=true;
+    clearAdversePreview();
     $('adverseFormsDialog').showModal();
 };
 $('closeAdverseForms').onclick=()=>$('adverseFormsDialog').close();
 for (const code of ['303','304']) $('prepare'+code).onclick=()=>printAdverseForms(adverseApplicantId,code);
 async function printAdverseForms(id, which) {
     const a=applicants.find(x=>x.id===id); if(!a) { adverseFormMessage('Applicant not found. Close this window and try again.'); return; }
-    $('adverseFormDownload').hidden=true;
+    clearAdversePreview();
     adverseFormMessage('Checking AD-'+which+' requirements…');
     if(!a.applicantStreet||!a.applicantCity||!a.applicantState||!a.applicantZip) {
         adverseFormMessage('First open Update and complete the applicant mailing address.');return;
@@ -757,6 +768,7 @@ async function printAdverseForms(id, which) {
     }
     const letterDate = fmtDate(sentDate);
     try {
+        $('prepare303').disabled = $('prepare304').disabled = true;
         adverseFormMessage('Loading original AD-'+which+' PDF…');
         const original=await officialFormRead(which);
         if(!original) {adverseFormMessage('First select the original AD-'+which+' PDF in the Official Corporate PDF Forms section at the top of this page. It will be saved on this browser.');return;}
@@ -798,11 +810,18 @@ async function printAdverseForms(id, which) {
         adverseDownloadUrl=url;
         const link=$('adverseFormDownload'); link.href=url; link.download='AD-'+which+'_'+(a.name||'Applicant').replace(/[^a-z0-9 -]/gi,'').replace(/ +/g,'_')+(includeReviewForms?'_with_Right_to_Review':'')+'.pdf';
         link.textContent='Download AD-'+which+(includeReviewForms?' + review forms':'')+' PDF'; link.hidden=false;
+        $('adversePreviewTitle').textContent = 'Filled AD-'+which+' — '+(a.name || 'Applicant');
+        $('adverseFormOpen').href = url;
+        $('adversePreviewFrame').src = url;
+        $('adverseFormPreview').hidden = false;
+        $('adverseFormsDialog').showModal();
         const packetNote = includeReviewForms ? ' The three Right to Review forms are included (4 additional pages).' : ' The Right to Review forms are not included; use the links above to print them separately.';
         if(which==='303') adverseFormMessage('Original six-page AD-303 is ready, including its FCRA rights pages.'+packetNote+' Review all fields, obtain Administrator signature and record the actual date sent. Per the November 16 corporate update, do not mail background results; advise the applicant that a copy is available for pickup at the facility.');
         else adverseFormMessage('Original AD-304 is ready.'+packetNote+' Verify the reporting agency details, review with the Administrator and record the actual date sent. Do not mail background results; copies are available for applicant pickup.');
     } catch(err) {
         adverseFormMessage('The original form could not be filled: '+err.message+'. Please confirm you selected the original writable PDF and try again.');
+    } finally {
+        $('prepare303').disabled = $('prepare304').disabled = false;
     }
 }
 window.printAdverseForms = printAdverseForms;
@@ -811,3 +830,4 @@ render();
 </script>
 </body>
 </html>
+
