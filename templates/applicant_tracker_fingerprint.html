@@ -119,7 +119,7 @@
             <div><label for="preAdverseSentDate">Pre-adverse notice sent</label><input id="preAdverseSentDate" type="date"></div>
             <div><label for="backgroundResponse">Applicant response</label><select id="backgroundResponse"><option value="">Not applicable / Pending</option><option>Received</option><option>No Response</option></select></div>
             <div><label for="managementDecision">Management decision</label><select id="managementDecision"><option value="">Pending</option><option>Cleared to Continue</option><option>Do Not Hire</option></select></div>
-            <div><label for="finalAdverseSentDate">Final adverse notice sent</label><input id="finalAdverseSentDate" type="date"></div><div class="span-2"><label for="agencyName">Consumer reporting agency (verify against report)</label><input id="agencyName" placeholder="Louisiana State Police — BCII-LCJIS"></div><div class="span-2"><label for="agencyAddress">Reporting agency mailing address</label><input id="agencyAddress" placeholder="P.O. Box 66614, Box A-6, Baton Rouge, LA 70896"></div><div><label for="agencyPhone">Reporting agency telephone</label><input id="agencyPhone" placeholder="(225) 925-6095"></div><div><label for="administratorName">Administrator name (for signature)</label><input id="administratorName"></div><div class="span-2"><label for="facilityLegalName">Facility name</label><input id="facilityLegalName" value="Landmark South Nursing and Rehabilitation Center"></div>
+            <div><label for="finalAdverseSentDate">Final adverse notice sent</label><input id="finalAdverseSentDate" type="date"></div><div class="span-2"><label for="agencyName">Consumer reporting agency (verify against report)</label><p class="hint">Louisiana State Police details fill in automatically. You can edit them for a different reporting agency.</p><input id="agencyName" placeholder="Louisiana State Police — BCII-LCJIS"></div><div class="span-2"><label for="agencyAddress">Reporting agency mailing address</label><input id="agencyAddress" placeholder="P.O. Box 66614, Box A-6, Baton Rouge, LA 70896"></div><div><label for="agencyPhone">Reporting agency telephone</label><input id="agencyPhone" placeholder="(225) 925-6095"></div><div><label for="administratorName">Administrator name (for signature)</label><input id="administratorName"></div><div class="span-2"><label for="facilityLegalName">Facility name</label><input id="facilityLegalName" value="Landmark South Nursing and Rehabilitation Center"></div>
 
             <h3 class="section-title">Offer</h3>
             <div><label for="payRate">Pay rate</label><input id="payRate" inputmode="decimal" placeholder="Example: 17.00"></div>
@@ -191,6 +191,18 @@
 <script>
 const STORAGE_KEY = 'landmarkFingerprintApplicantTrackerV1';
 const fields = ['name','phone','email','department','shift','applicantStreet','applicantCity','applicantState','applicantZip','agencyName','agencyAddress','agencyPhone','administratorName','facilityLegalName','fingerprintAppointmentDate','fingerprintCompleted','fingerprintResult','fingerprintReceipt','backgroundReview','preAdverseSentDate','backgroundResponse','managementDecision','finalAdverseSentDate','payRate','offerSentDate','offerReply','acceptanceDate','orientation1','orientation1Result','orientation2','orientation2Result','notes','manualClose'];
+const DEFAULT_REPORTING_AGENCY = Object.freeze({
+    agencyName: 'Louisiana State Police — BCII-LCJIS',
+    agencyAddress: 'P.O. Box 66614, Box A-6, Baton Rouge, LA 70896',
+    agencyPhone: '(225) 925-6095'
+});
+function reportingAgencyFor(applicant = {}) {
+    // A different named agency requires its own contact information.
+    const customAgency = applicant.agencyName?.trim() &&
+        applicant.agencyName.trim() !== DEFAULT_REPORTING_AGENCY.agencyName;
+    return Object.fromEntries(Object.entries(DEFAULT_REPORTING_AGENCY).map(([key, value]) =>
+        [key, applicant[key]?.trim() || (customAgency ? '' : value)]));
+}
 let applicants = loadApplicants();
 let emailDraft = null;
 
@@ -340,12 +352,12 @@ function refreshOptions() {
 }
 
 function openNew() {
-    $('applicantForm').reset(); $('applicantId').value = ''; $('formTitle').textContent = 'New Applicant'; $('applicantDialog').showModal();
+    $('applicantForm').reset(); Object.entries(DEFAULT_REPORTING_AGENCY).forEach(([key, value]) => $(key).value = value); $('applicantId').value = ''; $('formTitle').textContent = 'New Applicant'; $('applicantDialog').showModal();
 }
 
 window.editApplicant = id => {
     const a = applicants.find(x => x.id === id); if (!a) return;
-    $('applicantId').value = a.id; fields.forEach(f => $(f).value = a[f] || '');
+    $('applicantId').value = a.id; const populated = {...a, ...reportingAgencyFor(a)}; fields.forEach(f => $(f).value = populated[f] || '');
     $('formTitle').textContent = 'Update ' + a.name; $('applicantDialog').showModal();
 };
 
@@ -757,7 +769,8 @@ async function printAdverseForms(id, which) {
         if(a.managementDecision!=='Do Not Hire'||!a.preAdverseSentDate||!adverseReviewReady(a.preAdverseSentDate)) {
             adverseFormMessage('AD-304 requires a Do Not Hire decision and five business days after the recorded AD-303 notice. Independently verify holidays, any dispute and Administrator approval.');return;
         }
-        if(!a.agencyName||!a.agencyAddress||!a.agencyPhone) {
+        const agency = reportingAgencyFor(a);
+        if(!agency.agencyName||!agency.agencyAddress||!agency.agencyPhone) {
             adverseFormMessage('Enter the consumer reporting agency name, mailing address and phone exactly as verified for this report.');return;
         }
     }
@@ -788,7 +801,8 @@ async function printAdverseForms(id, which) {
             set('As you are aware part of',a.facilityLegalName||'Landmark South Nursing and Rehabilitation Center');
             form.getCheckBox('Check Box4').check();
         } else {
-            const lines=[a.agencyName,a.agencyAddress,a.agencyPhone].filter(Boolean);
+            const agency = reportingAgencyFor(a);
+            const lines=[agency.agencyName,agency.agencyAddress,agency.agencyPhone].filter(Boolean);
             const keys=[
                 'report which we obtained from the consumer reporting agency listed below 1',
                 'report which we obtained from the consumer reporting agency listed below 2',
